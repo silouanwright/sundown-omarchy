@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.silouanwright.sundown",
+  "name": "Sundown",
+  "version": "0.1.0",
+  "author": "Silouan Wright",
+  "license": "MIT",
+  "homepage": "https://github.com/silouanwright/sundown-omarchy",
+  "repository": "https://github.com/silouanwright/sundown-omarchy",
+  "description": "Glanceable allowances, curfew status, browser health, and Screen Time history from Sundown.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "activation": "on-demand",
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Sundown",
+    "description": "Current limits, protection health, and seven-day usage.",
+    "category": "Wellbeing",
+    "aliases": [
+      "screen-time",
+      "curfew",
+      "limits",
+      "wellbeing"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}
