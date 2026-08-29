@@ -62,4 +62,4 @@ remain in the separately installed Sundown core.
 
 ## License
 
-GPL-3.0-or-later
+MIT
