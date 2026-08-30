@@ -38,7 +38,11 @@ function emptyStatus() {
       enforcement_ready: false,
       active_rule: null,
       rules: []
-    }
+    },
+    apps: { healthy: false, groups: [] },
+    flex: { enabled: false, pass_seconds: 0, remaining_uses: 0, eligible: [], redemptions: [] },
+    gates: [],
+    earned: []
   }
 }
 
@@ -50,7 +54,7 @@ function emptyReport() {
     end_date: "",
     recorded_days: 0,
     days: [],
-    totals: { steam_seconds: 0, web_seconds: {} },
+    totals: { steam_seconds: 0, web_seconds: {}, app_seconds: {} },
     limit_hits: []
   }
 }
@@ -82,6 +86,13 @@ function parseStatus(raw) {
   value.morning = value.morning || fallback.morning
   value.web = value.web || fallback.web
   value.web.rules = Array.isArray(value.web.rules) ? value.web.rules : []
+  value.apps = value.apps || fallback.apps
+  value.apps.groups = Array.isArray(value.apps.groups) ? value.apps.groups : []
+  value.flex = value.flex || fallback.flex
+  value.flex.eligible = Array.isArray(value.flex.eligible) ? value.flex.eligible : []
+  value.flex.redemptions = Array.isArray(value.flex.redemptions) ? value.flex.redemptions : []
+  value.gates = Array.isArray(value.gates) ? value.gates : []
+  value.earned = Array.isArray(value.earned) ? value.earned : []
   return { ok: true, data: value, error: "" }
 }
 
@@ -90,8 +101,9 @@ function parseReport(raw) {
   if (!parsed.ok) return parsed
   var value = parsed.data
   value.days = Array.isArray(value.days) ? value.days : []
-  value.totals = value.totals || { steam_seconds: 0, web_seconds: {} }
+  value.totals = value.totals || { steam_seconds: 0, web_seconds: {}, app_seconds: {} }
   value.totals.web_seconds = value.totals.web_seconds || {}
+  value.totals.app_seconds = value.totals.app_seconds || {}
   value.limit_hits = Array.isArray(value.limit_hits) ? value.limit_hits : []
   return { ok: true, data: value, error: "" }
 }
@@ -108,19 +120,55 @@ function titleForRule(name) {
   }).join(" ")
 }
 
-function budgetRow(id, label, value) {
-  var limit = Math.max(0, number(value.daily_limit_seconds, 0))
+function targetLabel(target, status) {
+  if (String(target || "").toLowerCase() === "steam")
+    return titleForRule(status && status.steam && status.steam.name || "steam")
+  var parts = String(target || "").split(":")
+  return titleForRule(parts.length > 1 ? parts.slice(1).join(":") : parts[0])
+}
+
+function gateForTarget(status, target) {
+  var gates = status && Array.isArray(status.gates) ? status.gates : []
+  for (var i = 0; i < gates.length; i++) {
+    var targets = Array.isArray(gates[i].targets) ? gates[i].targets : []
+    if (targets.some(function(candidate) {
+      return String(candidate).toLowerCase() === String(target).toLowerCase()
+    })) return gates[i]
+  }
+  return null
+}
+
+function budgetRow(id, label, value, status) {
+  var restricted = value.daily_limit_seconds !== null && value.daily_limit_seconds !== undefined
+  var baseLimit = restricted ? Math.max(0, number(value.daily_limit_seconds, 0)) : 0
+  var limit = restricted ? baseLimit
+    + Math.max(0, number(value.flex_granted_seconds, 0))
+    + Math.max(0, number(value.earned_granted_seconds, 0)) : 0
   var used = Math.max(0, number(value.used_seconds, 0))
-  var remaining = Math.max(0, number(value.remaining_seconds, Math.max(0, limit - used)))
+  var dailyRemaining = restricted ? Math.max(0, limit - used) : 0
+  var remaining = restricted ? Math.max(0, number(value.available_seconds,
+    number(value.remaining_seconds, dailyRemaining))) : 0
+  var blockedBy = value.blocked_by || ""
+  var gate = gateForTarget(status, id)
+  var schedule = value.schedule || null
+  var pace = value.pace || null
   return {
     id: id,
     label: label,
+    restricted: restricted,
     used: used,
     limit: limit,
     remaining: remaining,
     ratio: limit > 0 ? clamp(used / limit, 0, 1) : 0,
     active: value.active === true,
-    reached: value.limit_reached === true || (limit > 0 && remaining <= 0),
+    blocked: blockedBy !== "" || value.action_due === true,
+    reached: blockedBy === "daily-limit" || value.limit_reached === true,
+    blockedBy: blockedBy,
+    gate: gate,
+    schedule: schedule,
+    pace: pace,
+    flexRemaining: Math.max(0, number(value.flex_remaining_seconds, 0)),
+    earnedBank: Math.max(0, number(value.earned_bank_seconds, 0)),
     warningMinutes: value.next_warning_minutes === null || value.next_warning_minutes === undefined
       ? null : Math.max(0, number(value.next_warning_minutes, 0))
   }
@@ -128,13 +176,93 @@ function budgetRow(id, label, value) {
 
 function budgetRows(status) {
   status = status || emptyStatus()
-  var rows = [budgetRow("steam", "Steam", status.steam || {})]
+  var rows = [budgetRow("steam", titleForRule(status.steam && status.steam.name || "steam"), status.steam || {}, status)]
   var rules = status.web && Array.isArray(status.web.rules) ? status.web.rules : []
   for (var i = 0; i < rules.length; i++) {
     var rule = rules[i] || {}
-    rows.push(budgetRow(String(rule.name || "website-" + i), titleForRule(rule.name), rule))
+    rows.push(budgetRow("web:" + String(rule.name || "website-" + i), titleForRule(rule.name), rule, status))
+  }
+  var groups = status.apps && Array.isArray(status.apps.groups) ? status.apps.groups : []
+  for (var j = 0; j < groups.length; j++) {
+    var group = groups[j] || {}
+    if (group.shared_with_steam === true) continue
+    rows.push(budgetRow("app:" + String(group.name || "application-" + j), titleForRule(group.name), group, status))
   }
   return rows
+}
+
+function budgetDetail(row) {
+  row = row || {}
+  if (row.restricted === false) return "Observed activity"
+  if (row.blockedBy === "schedule") return "Outside schedule"
+  if (row.blockedBy === "prerequisite-gate") {
+    var gate = row.gate || {}
+    return formatDuration(gate.remaining_seconds) + " in " + titleForRule(gate.source_group) + " needed"
+  }
+  if (row.blockedBy === "pace-limit") return "Rolling limit reached"
+  if (row.blockedBy === "daily-limit") return "Blocked for today"
+  if (row.pace) return formatDuration(row.pace.used_seconds) + " / "
+    + formatDuration(row.pace.limit_seconds) + " · "
+    + formatDuration(row.pace.window_seconds) + " rolling"
+  return formatDuration(row.remaining) + " remaining"
+}
+
+function gateRows(status) {
+  var gates = status && Array.isArray(status.gates) ? status.gates : []
+  return gates.map(function(gate) {
+    var required = Math.max(0, number(gate.required_seconds, 0))
+    var used = Math.max(0, number(gate.used_seconds, 0))
+    return {
+      name: String(gate.name || "Prerequisite"),
+      source: titleForRule(gate.source_group),
+      targets: (Array.isArray(gate.targets) ? gate.targets : []).map(function(target) {
+        return targetLabel(target, status)
+      }).join(", "),
+      used: used,
+      required: required,
+      remaining: Math.max(0, number(gate.remaining_seconds, required - used)),
+      ratio: required > 0 ? clamp(used / required, 0, 1) : 0,
+      satisfied: gate.satisfied === true
+    }
+  })
+}
+
+function earnedRows(status) {
+  var earned = status && Array.isArray(status.earned) ? status.earned : []
+  return earned.map(function(value) {
+    var cap = Math.max(0, number(value.bank_cap_seconds, 0))
+    var bank = Math.max(0, number(value.bank_seconds, 0))
+    return {
+      name: titleForRule(value.name),
+      source: titleForRule(value.source_group),
+      target: targetLabel(value.target, status),
+      bank: bank,
+      cap: cap,
+      ratio: cap > 0 ? clamp(bank / cap, 0, 1) : 0,
+      earning: value.earning_now === true,
+      suppressed: value.suppressed_by_target_activity === true
+    }
+  })
+}
+
+function flexTargets(status) {
+  var flex = status && status.flex ? status.flex : emptyStatus().flex
+  var eligible = Array.isArray(flex.eligible) ? flex.eligible : []
+  return eligible.map(function(target) {
+    return { target: String(target), label: targetLabel(target, status) }
+  })
+}
+
+function flexAuditRows(status) {
+  var flex = status && status.flex ? status.flex : emptyStatus().flex
+  var redemptions = Array.isArray(flex.redemptions) ? flex.redemptions : []
+  return redemptions.slice().reverse().map(function(redemption) {
+    return {
+      label: targetLabel(redemption.target, status),
+      seconds: Math.max(0, number(redemption.granted_seconds, 0)),
+      redeemedAt: String(redemption.redeemed_at || "")
+    }
+  })
 }
 
 function formatDuration(seconds) {
@@ -175,6 +303,8 @@ function totalForDay(day) {
   var total = number(day && day.steam && day.steam.used_seconds, 0)
   var web = day && Array.isArray(day.web) ? day.web : []
   for (var i = 0; i < web.length; i++) total += number(web[i] && web[i].used_seconds, 0)
+  var apps = day && Array.isArray(day.apps) ? day.apps : []
+  for (var j = 0; j < apps.length; j++) total += number(apps[j] && apps[j].used_seconds, 0)
   return Math.max(0, total)
 }
 
@@ -216,7 +346,51 @@ function reportTotal(report) {
   var total = number(totals.steam_seconds, 0)
   var web = totals.web_seconds || {}
   Object.keys(web).forEach(function(key) { total += number(web[key], 0) })
+  var apps = totals.app_seconds || {}
+  Object.keys(apps).forEach(function(key) { total += number(apps[key], 0) })
   return Math.max(0, total)
+}
+
+function reportCategories(report, status) {
+  report = report || emptyReport()
+  var totals = report.totals || {}
+  var steam = status && status.steam || {}
+  var shared = String(steam.shared_app_group || "")
+  var apps = totals.app_seconds || {}
+  var steamSeconds = number(totals.steam_seconds, 0) + (shared ? number(apps[shared], 0) : 0)
+  var rows = [{ id: "steam", label: titleForRule(steam.name || "steam"), seconds: Math.max(0, steamSeconds) }]
+  var web = totals.web_seconds || {}
+  Object.keys(web).forEach(function(key) {
+    rows.push({ id: "web:" + key, label: titleForRule(key), seconds: Math.max(0, number(web[key], 0)) })
+  })
+  Object.keys(apps).forEach(function(key) {
+    if (shared && key.toLowerCase() === shared.toLowerCase()) return
+    rows.push({ id: "app:" + key, label: titleForRule(key), seconds: Math.max(0, number(apps[key], 0)) })
+  })
+  return rows
+}
+
+function clockSeconds(value) {
+  var match = /^(\d{1,2}):(\d{2})$/.exec(String(value || ""))
+  if (!match) return null
+  return Number(match[1]) * 3600 + Number(match[2]) * 60
+}
+
+function dayWindow(status) {
+  status = status || emptyStatus()
+  var curfew = status.curfew || {}
+  var opens = clockSeconds(curfew.end)
+  var closes = clockSeconds(curfew.start)
+  if (opens === null || closes === null) return { ratio: 0, remaining: 0 }
+  var length = closes - opens
+  if (length <= 0) length += 86400
+  var remaining = Math.max(0, number(curfew.seconds_until_start, 0))
+  var now = new Date()
+  var nowSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
+  var ratio
+  if (curfew.active === true) ratio = nowSeconds < opens ? 0 : 1
+  else ratio = clamp((length - Math.min(length, remaining)) / length, 0, 1)
+  return { ratio: ratio, remaining: remaining }
 }
 
 function recordedDaysLabel(count) {

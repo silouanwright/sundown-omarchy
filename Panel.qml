@@ -1,6 +1,7 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
-import Quickshell
 import qs.Commons
 import qs.Ui
 import "Model.js" as Model
@@ -12,21 +13,42 @@ Panel {
   readonly property color dim: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.62)
   readonly property string fontFamily: Style.font.family
   readonly property var budgetRows: Model.budgetRows(controller.status)
+  readonly property var gateRows: Model.gateRows(controller.status)
+  readonly property var earnedRows: Model.earnedRows(controller.status)
   readonly property var weekRows: Model.weekRows(controller.report)
+  readonly property var historyCategories: Model.reportCategories(controller.report, controller.status)
+  readonly property var dayWindow: Model.dayWindow(controller.status)
   readonly property real weekMaximum: Model.maximumDay(weekRows)
   readonly property bool attention: controller.statusKnown && (
     controller.status.curfew.active === true
     || controller.status.mode !== "enforce"
     || controller.status.runtime.support_level !== "enforcing"
     || controller.status.web.healthy !== true
-    || budgetRows.some(function(row) { return row.reached })
+    || (controller.status.apps.groups.length > 0 && controller.status.apps.healthy !== true)
   )
 
   function clockLabel(value) {
-    var match = /^(\d{1,2}):(\d{2})$/.exec(String(value || ""))
+    const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || ""))
     if (!match) return String(value || "")
-    var date = new Date(2000, 0, 1, Number(match[1]), Number(match[2]))
+    const date = new Date(2000, 0, 1, Number(match[1]), Number(match[2]))
     return date.toLocaleTimeString(Qt.locale(), Locale.ShortFormat)
+  }
+
+  function ensureVisible(item) {
+    if (!item || !scrollArea) return
+    Qt.callLater(function() {
+      const flick = scrollArea.contentItem
+      if (!item || !flick || flick.contentY === undefined) return
+      const point = item.mapToItem(flick.contentItem || flick, 0, 0)
+      const margin = Style.space(8)
+      const top = point.y
+      const bottom = top + item.height
+      const maximum = Math.max(0, flick.contentHeight - flick.height)
+      if (top < flick.contentY + margin)
+        flick.contentY = Math.max(0, top - margin)
+      else if (bottom > flick.contentY + flick.height - margin)
+        flick.contentY = Math.min(maximum, bottom + margin - flick.height)
+    })
   }
 
   function heroTitle() {
@@ -44,7 +66,14 @@ Panel {
     if (!controller.statusKnown) return qsTr("Loading current policy")
     if (controller.statusCompatibility !== "") return controller.statusError
     if (!controller.available) return qsTr("The Sundown command could not be reached")
-    return root.heroTitle()
+    if (controller.status.mode !== "enforce") return root.heroTitle()
+    if (controller.status.curfew.active)
+      return qsTr("Curfew active until %1").arg(clockLabel(controller.status.curfew.end))
+    if (controller.status.morning.active)
+      return qsTr("Morning routine until %1").arg(clockLabel(controller.status.morning.end))
+    return qsTr("Available %1–%2")
+      .arg(clockLabel(controller.status.curfew.end))
+      .arg(clockLabel(controller.status.curfew.start))
   }
 
   function heroPill() {
@@ -64,6 +93,8 @@ Panel {
     if (controller.status.morning.active)
       return qsTr("Sundown morning routine is active until %1").arg(clockLabel(controller.status.morning.end))
     if (!controller.status.web.healthy) return qsTr("Sundown browser protection needs attention")
+    if (controller.status.apps.groups.length > 0 && !controller.status.apps.healthy)
+      return qsTr("Sundown application tracking needs attention")
     return qsTr("Sundown curfew begins in %1").arg(Model.formatCountdown(controller.status.curfew.seconds_until_start))
   }
 
@@ -74,7 +105,10 @@ Panel {
 
   onOpenedChanged: {
     controller.panelOpen = opened
-    if (opened) controller.refreshAll()
+    if (opened) {
+      flexSection.resetCursor()
+      controller.refreshAll()
+    }
   }
 
   SundownController {
@@ -100,6 +134,7 @@ Panel {
     id: heroIcon
     Text {
       text: "󰖔"
+      textFormat: Text.PlainText
       color: root.attention ? Color.urgent : Color.accent
       font.family: root.fontFamily
       font.pixelSize: Style.font.display
@@ -121,6 +156,13 @@ Panel {
       anchors.fill: parent
       onCloseRequested: root.close()
       onTabRequested: function(direction) { root.switchPanel(direction) }
+      onMoveRequested: function(_dx, dy) {
+        if (flexSection.visible && dy !== 0) {
+          flexSection.moveCursor(dy)
+          root.ensureVisible(flexSection.cursorItem())
+        }
+      }
+      onActivateRequested: if (flexSection.visible && flexSection.cursorActive) flexSection.activateCursor()
       onTextKey: function(text) {
         if (text === "r" || text === "R") controller.refreshAll()
       }
@@ -146,6 +188,23 @@ Panel {
             fontFamily: root.fontFamily
           }
 
+          PolicyProgressRow {
+            visible: controller.statusKnown && controller.statusCompatibility === ""
+            label: qsTr("Usable day")
+            value: qsTr("%1–%2")
+              .arg(root.clockLabel(controller.status.curfew.end))
+              .arg(root.clockLabel(controller.status.curfew.start))
+            detail: controller.status.curfew.active
+              ? qsTr("Curfew is active")
+              : qsTr("%1 until curfew").arg(Model.formatCountdown(root.dayWindow.remaining))
+            ratio: root.dayWindow.ratio
+            complete: controller.status.curfew.active && root.dayWindow.ratio >= 1
+            active: !controller.status.curfew.active
+            foreground: root.foreground
+            dim: root.dim
+            fontFamily: root.fontFamily
+          }
+
           Text {
             visible: controller.statusError !== "" && controller.statusCompatibility === ""
             width: parent.width
@@ -162,6 +221,20 @@ Panel {
               && (!controller.status.web.healthy || !controller.status.web.enforcement_ready)
             width: parent.width
             text: qsTr("Browser protection needs attention")
+            textFormat: Text.PlainText
+            color: Color.urgent
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.body
+            font.bold: true
+            wrapMode: Text.WordWrap
+          }
+
+          Text {
+            visible: controller.available && controller.status.apps.groups.length > 0
+              && !controller.status.apps.healthy
+            width: parent.width
+            text: qsTr("Application tracking needs attention")
+            textFormat: Text.PlainText
             color: Color.urgent
             font.family: root.fontFamily
             font.pixelSize: Style.font.body
@@ -189,6 +262,7 @@ Panel {
               anchors.right: parent.right
               anchors.verticalCenter: parent.verticalCenter
               text: Model.formatDuration(Model.totalToday(root.budgetRows)) + qsTr(" tracked")
+              textFormat: Text.PlainText
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
@@ -198,84 +272,92 @@ Panel {
           Repeater {
             model: root.budgetRows
 
-            Column {
+            BudgetRow {
+              width: content.width
+              foreground: root.foreground
+              dim: root.dim
+              fontFamily: root.fontFamily
+            }
+          }
+
+          PanelSeparator {
+            visible: root.gateRows.length > 0
+            foreground: root.foreground
+          }
+
+          PanelSectionHeader {
+            visible: root.gateRows.length > 0
+            text: qsTr("PREREQUISITES")
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+          }
+
+          Repeater {
+            model: root.gateRows
+
+            PolicyProgressRow {
               required property var modelData
               width: content.width
-              spacing: Style.space(5)
-
-              Item {
-                width: parent.width
-                implicitHeight: Math.max(budgetLabel.implicitHeight, budgetTime.implicitHeight)
-
-                Text {
-                  id: budgetLabel
-                  anchors.left: parent.left
-                  anchors.right: budgetTime.left
-                  anchors.rightMargin: Style.space(8)
-                  text: modelData.label + (modelData.active ? qsTr(" · active") : "")
-                  textFormat: Text.PlainText
-                  color: modelData.reached ? Color.urgent : root.foreground
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.body
-                  font.bold: modelData.active || modelData.reached
-                  elide: Text.ElideRight
-                }
-
-                Text {
-                  id: budgetTime
-                  anchors.right: parent.right
-                  text: Model.formatDuration(modelData.used) + " / " + Model.formatDuration(modelData.limit)
-                  color: modelData.reached ? Color.urgent : root.dim
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.body
-                }
-              }
-
-              Rectangle {
-                width: parent.width
-                height: Style.space(5)
-                radius: Style.cornerRadius > 0 ? height / 2 : 0
-                color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.12)
-
-                Rectangle {
-                  width: Math.round(parent.width * modelData.ratio)
-                  height: parent.height
-                  radius: parent.radius
-                  color: modelData.reached ? Color.urgent
-                    : (modelData.active ? Color.accent
-                      : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.62))
-                }
-              }
-
-              Item {
-                width: parent.width
-                implicitHeight: Math.max(remainingText.implicitHeight, warningText.implicitHeight)
-
-                Text {
-                  id: remainingText
-                  anchors.left: parent.left
-                  anchors.right: warningText.left
-                  anchors.rightMargin: Style.space(8)
-                  text: modelData.reached ? qsTr("Blocked for today")
-                    : qsTr("%1 remaining").arg(Model.formatDuration(modelData.remaining))
-                  color: modelData.reached ? Color.urgent : root.dim
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  elide: Text.ElideRight
-                }
-
-                Text {
-                  id: warningText
-                  anchors.right: parent.right
-                  text: modelData.warningMinutes === null ? ""
-                    : qsTr("Warn at %1m left").arg(modelData.warningMinutes)
-                  color: root.dim
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                }
-              }
-
+              label: modelData.source
+              value: modelData.satisfied ? qsTr("Ready")
+                : qsTr("%1 left").arg(Model.formatDuration(modelData.remaining))
+              detail: modelData.satisfied
+                ? qsTr("%1 unlocked").arg(modelData.targets)
+                : qsTr("Unlocks %1").arg(modelData.targets)
+              ratio: modelData.ratio
+              complete: modelData.satisfied
+              foreground: root.foreground
+              dim: root.dim
+              fontFamily: root.fontFamily
             }
+          }
+
+          PanelSeparator {
+            visible: root.earnedRows.length > 0
+            foreground: root.foreground
+          }
+
+          PanelSectionHeader {
+            visible: root.earnedRows.length > 0
+            text: qsTr("EARNED TIME")
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+          }
+
+          Repeater {
+            model: root.earnedRows
+
+            PolicyProgressRow {
+              required property var modelData
+              width: content.width
+              label: qsTr("%1 → %2").arg(modelData.source).arg(modelData.target)
+              value: qsTr("%1 / %2").arg(Model.formatDuration(modelData.bank)).arg(Model.formatDuration(modelData.cap))
+              detail: modelData.suppressed ? qsTr("Paused while the target is active")
+                : modelData.earning ? qsTr("Earning now") : qsTr("Reward bank")
+              ratio: modelData.ratio
+              active: modelData.earning
+              foreground: root.foreground
+              dim: root.dim
+              fontFamily: root.fontFamily
+            }
+          }
+
+          PanelSeparator {
+            visible: flexSection.visible
+            foreground: root.foreground
+          }
+
+          FlexSection {
+            id: flexSection
+            width: content.width
+            status: controller.status
+            busy: controller.flexBusy
+            message: controller.flexMessage
+            error: controller.flexError
+            foreground: root.foreground
+            dim: root.dim
+            fontFamily: root.fontFamily
+            onRedeem: function(target) { controller.redeemFlex(target) }
           }
 
           PanelSeparator { foreground: root.foreground }
@@ -298,6 +380,7 @@ Panel {
               anchors.right: parent.right
               anchors.verticalCenter: parent.verticalCenter
               text: controller.reportKnown ? Model.formatDuration(Model.reportTotal(controller.report)) : qsTr("Loading…")
+              textFormat: Text.PlainText
               color: root.dim
               font.family: root.fontFamily
               font.pixelSize: Style.font.caption
@@ -323,6 +406,7 @@ Panel {
                   anchors.horizontalCenter: parent.horizontalCenter
                   anchors.top: parent.top
                   text: modelData.recorded ? Model.formatDuration(modelData.seconds) : "—"
+                  textFormat: Text.PlainText
                   color: root.dim
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.caption
@@ -334,7 +418,7 @@ Panel {
                   anchors.bottom: dayLabel.top
                   anchors.bottomMargin: Style.space(5)
                   height: {
-                    var available = parent.height - dayLabel.implicitHeight - Style.space(24)
+                    const available = parent.height - dayLabel.implicitHeight - Style.space(24)
                     if (!modelData.recorded) return Style.spacing.hairline
                     if (modelData.seconds <= 0) return Style.space(3)
                     return Math.max(Style.space(4), Math.round(available * modelData.seconds / root.weekMaximum))
@@ -349,6 +433,7 @@ Panel {
                   anchors.horizontalCenter: parent.horizontalCenter
                   anchors.bottom: parent.bottom
                   text: modelData.label
+                  textFormat: Text.PlainText
                   color: modelData.date === controller.report.end_date ? root.foreground : root.dim
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.caption
@@ -358,11 +443,45 @@ Panel {
             }
           }
 
+          Repeater {
+            model: controller.reportKnown ? root.historyCategories : []
+
+            Item {
+              required property var modelData
+              width: content.width
+              implicitHeight: Math.max(historyCategoryLabel.implicitHeight, historyCategoryTime.implicitHeight)
+
+              Text {
+                id: historyCategoryLabel
+                anchors.left: parent.left
+                anchors.right: historyCategoryTime.left
+                anchors.rightMargin: Style.space(8)
+                text: modelData.label
+                textFormat: Text.PlainText
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+                elide: Text.ElideRight
+              }
+
+              Text {
+                id: historyCategoryTime
+                anchors.right: parent.right
+                text: Model.formatDuration(modelData.seconds)
+                textFormat: Text.PlainText
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+              }
+            }
+          }
+
           Text {
             visible: controller.reportKnown && controller.reportError === ""
             width: parent.width
             text: Model.recordedDaysLabel(controller.report.recorded_days)
               + qsTr(" · unrecorded days are unknown")
+            textFormat: Text.PlainText
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption
@@ -385,6 +504,7 @@ Panel {
           Text {
             width: parent.width
             text: qsTr("Press R to refresh · right-click the bar icon anytime")
+            textFormat: Text.PlainText
             color: root.dim
             font.family: root.fontFamily
             font.pixelSize: Style.font.caption

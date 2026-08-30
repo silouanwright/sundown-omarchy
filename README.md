@@ -1,7 +1,8 @@
 # Sundown for Omarchy
 
-A native, read-only Omarchy bar panel for Sundown allowances, curfew state,
-browser health, warnings, and seven-day Screen Time history.
+A native Omarchy bar panel for Sundown allowances, schedules, prerequisites,
+earned time, flex passes, curfew state, browser health, and seven-day Screen
+Time history.
 
 ![Sundown panel](docs/assets/live-panel.png)
 
@@ -11,12 +12,21 @@ without crowding the panel. Healthy browser protection is silent; a browser
 warning appears only when protection needs attention.
 
 Sundown's Rust daemon remains authoritative. This independently versioned
-plugin stores no policy or usage data and calls only:
+plugin stores no policy or usage data. It reads status and reports with:
 
 ```bash
 sundown status --json
 sundown report week --json
 ```
+
+When flex passes are configured, the panel can explicitly redeem one through:
+
+```bash
+sundown flex redeem TARGET
+```
+
+The daemon validates the caller, target, remaining passes, schedule, curfew,
+morning focus, and prerequisite gate before recording any redemption.
 
 ## Install
 
@@ -39,7 +49,7 @@ omarchy plugin remove io.github.silouanwright.sundown
 
 ## Compatibility
 
-Plugin `0.1.x` supports Sundown status/report protocol `1`. A lower protocol
+Plugin `0.2.x` supports Sundown status/report protocol `1`. A lower protocol
 version prompts the user to update the Sundown core; a higher version prompts
 the user to update this plugin. The top-level `version` field in both JSON
 commands is the protocol contract, independent of either package version.
@@ -55,10 +65,11 @@ The plugin requires no third-party QML packages.
 
 ## Privacy and permissions
 
-The plugin runs `/usr/bin/sundown status --json` and `/usr/bin/sundown report
-week --json`. It has no installer, privileged actions, network access, or
-persistent state. Usage policy, counters, browser integration, and enforcement
-remain in the separately installed Sundown core.
+The plugin runs `/usr/bin/sundown status --json`, `/usr/bin/sundown report week
+--json`, and—only after an explicit panel action—`/usr/bin/sundown flex redeem
+TARGET`. It has no installer, privileged actions, network access, or persistent
+state. Usage policy, counters, browser integration, and enforcement remain in
+the separately installed Sundown core.
 
 ## License
 

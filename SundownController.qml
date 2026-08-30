@@ -16,10 +16,15 @@ Item {
   property string reportError: ""
   property string statusCompatibility: ""
   property string reportCompatibility: ""
+  property bool flexBusy: false
+  property string flexMessage: ""
+  property string flexError: ""
   property string _statusOutput: ""
   property string _statusStderr: ""
   property string _reportOutput: ""
   property string _reportStderr: ""
+  property string _flexOutput: ""
+  property string _flexStderr: ""
 
   visible: false
   width: 0
@@ -44,6 +49,17 @@ Item {
     refreshReport()
   }
 
+  function redeemFlex(target) {
+    if (flexProcess.running || !target) return
+    flexBusy = true
+    flexMessage = ""
+    flexError = ""
+    _flexOutput = ""
+    _flexStderr = ""
+    flexProcess.command = ["/usr/bin/sundown", "flex", "redeem", String(target)]
+    flexProcess.running = true
+  }
+
   function compatibilityMessage(issue, fallback) {
     if (issue === "core-too-old") return qsTr("Update the Sundown core to use this panel")
     if (issue === "plugin-too-old") return qsTr("Update the Sundown Omarchy plugin")
@@ -57,7 +73,7 @@ Item {
       waitForEnd: true
       onStreamFinished: {
         root._statusOutput = text
-        var parsed = Model.parseStatus(text)
+        const parsed = Model.parseStatus(text)
         if (parsed.ok) {
           root.status = parsed.data
           root.statusKnown = true
@@ -86,13 +102,40 @@ Item {
   }
 
   Process {
+    id: flexProcess
+    onRunningChanged: {
+      if (!running && root.flexBusy) {
+        root.flexBusy = false
+        root.flexError = qsTr("Could not start the Sundown command")
+      }
+    }
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root._flexOutput = String(text || "").trim()
+    }
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root._flexStderr = String(text || "").trim()
+    }
+    onExited: function(exitCode) {
+      root.flexBusy = false
+      if (exitCode === 0) {
+        root.flexMessage = root._flexOutput || qsTr("Flex pass redeemed")
+        root.refreshAll()
+      } else {
+        root.flexError = root._flexStderr || qsTr("Could not redeem the flex pass")
+      }
+    }
+  }
+
+  Process {
     id: reportProcess
     command: ["/usr/bin/sundown", "report", "week", "--json"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
         root._reportOutput = text
-        var parsed = Model.parseReport(text)
+        const parsed = Model.parseReport(text)
         if (parsed.ok) {
           root.report = parsed.data
           root.reportKnown = true
