@@ -19,11 +19,13 @@ Panel {
   readonly property var historyCategories: Model.reportCategories(controller.report, controller.status)
   readonly property var dayWindow: Model.dayWindow(controller.status)
   readonly property real weekMaximum: Model.maximumDay(weekRows)
+  readonly property bool browserAttention: controller.statusKnown
+    && Model.browserNeedsAttention(controller.status)
   readonly property bool attention: controller.statusKnown && (
     controller.status.curfew.active === true
     || controller.status.mode !== "enforce"
     || controller.status.runtime.support_level !== "enforcing"
-    || controller.status.web.healthy !== true
+    || root.browserAttention
     || (controller.status.apps.groups.length > 0 && controller.status.apps.healthy !== true)
   )
 
@@ -92,7 +94,7 @@ Panel {
       return qsTr("Sundown curfew is active until %1").arg(clockLabel(controller.status.curfew.end))
     if (controller.status.morning.active)
       return qsTr("Sundown morning routine is active until %1").arg(clockLabel(controller.status.morning.end))
-    if (!controller.status.web.healthy) return qsTr("Sundown browser protection needs attention")
+    if (root.browserAttention) return qsTr("Sundown browser protection needs attention")
     if (controller.status.apps.groups.length > 0 && !controller.status.apps.healthy)
       return qsTr("Sundown application tracking needs attention")
     return qsTr("Sundown curfew begins in %1").arg(Model.formatCountdown(controller.status.curfew.seconds_until_start))
@@ -217,8 +219,7 @@ Panel {
           }
 
           Text {
-            visible: controller.available
-              && (!controller.status.web.healthy || !controller.status.web.enforcement_ready)
+            visible: controller.available && root.browserAttention
             width: parent.width
             text: qsTr("Browser protection needs attention")
             textFormat: Text.PlainText

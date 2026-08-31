@@ -36,6 +36,7 @@ function emptyStatus() {
     web: {
       healthy: false,
       enforcement_ready: false,
+      browser_active: false,
       active_rule: null,
       rules: []
     },
@@ -44,6 +45,12 @@ function emptyStatus() {
     gates: [],
     earned: []
   }
+}
+
+function browserNeedsAttention(status) {
+  var web = status && status.web ? status.web : emptyStatus().web
+  return web.browser_active === true
+    && (web.healthy !== true || web.enforcement_ready !== true)
 }
 
 function emptyReport() {

@@ -45,6 +45,15 @@ assert.equal(budgets[1].label, "Social")
 assert.equal(context.totalToday(budgets), 4200)
 assert.equal(context.formatDuration(59), "<1m")
 assert.equal(context.formatDuration(7260), "2h 1m")
+assert.equal(context.browserNeedsAttention({
+  web: { browser_active: false, healthy: false, enforcement_ready: false }
+}), false)
+assert.equal(context.browserNeedsAttention({
+  web: { browser_active: true, healthy: false, enforcement_ready: false }
+}), true)
+assert.equal(context.browserNeedsAttention({
+  web: { browser_active: true, healthy: true, enforcement_ready: true }
+}), false)
 
 const gamingStatus = context.parseStatus(JSON.stringify({
   version: 1,
