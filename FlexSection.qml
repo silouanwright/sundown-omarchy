@@ -21,31 +21,51 @@ Column {
   readonly property var flex: status && status.flex ? status.flex : Model.emptyStatus().flex
   property int cursorIndex: 0
   property bool cursorActive: false
+  property bool expanded: false
+  readonly property int actionCount: expanded ? targets.length + 1 : 1
 
   signal redeem(string target)
 
   function moveCursor(direction) {
-    if (targets.length === 0) return
     if (!cursorActive) {
       cursorActive = true
-      cursorIndex = direction < 0 ? targets.length - 1 : 0
+      cursorIndex = direction < 0 ? actionCount - 1 : 0
       return
     }
-    cursorIndex = Math.max(0, Math.min(targets.length - 1, cursorIndex + direction))
+    cursorIndex = Math.max(0, Math.min(actionCount - 1, cursorIndex + direction))
   }
 
   function activateCursor() {
-    if (!cursorActive || cursorIndex < 0 || cursorIndex >= targets.length
-        || busy || (flex.remaining_uses || 0) <= 0) return
-    redeem(targets[cursorIndex].target)
+    if (!cursorActive || cursorIndex < 0 || cursorIndex >= actionCount) return
+    if (cursorIndex === 0) {
+      toggleExpanded()
+      return
+    }
+    chooseTarget(targets[cursorIndex - 1].target)
+  }
+
+  function toggleExpanded() {
+    if (busy || (flex.remaining_uses || 0) <= 0 || targets.length === 0) return
+    expanded = !expanded
+    cursorActive = true
+    cursorIndex = expanded ? 1 : 0
+  }
+
+  function chooseTarget(target) {
+    if (busy || (flex.remaining_uses || 0) <= 0) return
+    expanded = false
+    cursorIndex = 0
+    redeem(target)
   }
 
   function cursorItem() {
-    return cursorIndex >= 0 && cursorIndex < targets.length
-      ? flexRepeater.itemAt(cursorIndex) : null
+    if (cursorIndex === 0) return flexButton
+    return cursorIndex > 0 && cursorIndex < actionCount
+      ? flexRepeater.itemAt(cursorIndex - 1) : null
   }
 
   function resetCursor() {
+    expanded = false
     cursorActive = false
     cursorIndex = 0
   }
@@ -57,10 +77,11 @@ Column {
 
   function clampCursor() {
     if (targets.length === 0) {
-      resetCursor()
+      expanded = false
+      cursorIndex = 0
       return
     }
-    cursorIndex = Math.max(0, Math.min(targets.length - 1, cursorIndex))
+    cursorIndex = Math.max(0, Math.min(actionCount - 1, cursorIndex))
   }
 
   visible: flex.enabled === true
@@ -75,8 +96,11 @@ Column {
     PanelSectionHeader {
       id: header
       anchors.left: parent.left
+      anchors.right: balance.left
+      anchors.rightMargin: Style.space(8)
       anchors.verticalCenter: parent.verticalCenter
       text: qsTr("FLEX PASS")
+      elide: Text.ElideRight
       foreground: root.foreground
       fontFamily: root.fontFamily
     }
@@ -95,7 +119,30 @@ Column {
     }
   }
 
+  Button {
+    id: flexButton
+
+    width: root.width
+    text: (root.flex.remaining_uses || 0) > 0 ? qsTr("Use flex pass") : qsTr("Flex pass used today")
+    bordered: true
+    hasCursor: root.cursorActive && root.cursorIndex === 0
+    enabled: !root.busy && (root.flex.remaining_uses || 0) > 0 && root.targets.length > 0
+    foreground: root.foreground
+    fontFamily: root.fontFamily
+    Accessible.role: Accessible.Button
+    Accessible.name: text
+    Accessible.description: root.expanded ? qsTr("Hide eligible targets") : qsTr("Show eligible targets")
+    onHovered: function(isHovered) {
+      if (isHovered) {
+        root.cursorActive = true
+        root.cursorIndex = 0
+      }
+    }
+    onClicked: root.toggleExpanded()
+  }
+
   Column {
+    visible: root.expanded
     width: parent.width
     spacing: Style.space(6)
 
@@ -114,7 +161,7 @@ Column {
 
         width: root.width
         implicitHeight: Style.space(40)
-        hasCursor: root.cursorActive && index === root.cursorIndex
+        hasCursor: root.cursorActive && index + 1 === root.cursorIndex
         bordered: true
         enabled: !root.busy && (root.flex.remaining_uses || 0) > 0
         foreground: root.foreground
@@ -128,9 +175,9 @@ Column {
           cursorShape: flexRow.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
           onEntered: {
             root.cursorActive = true
-            root.cursorIndex = flexRow.index
+            root.cursorIndex = flexRow.index + 1
           }
-          onClicked: root.redeem(flexRow.modelData.target)
+          onClicked: root.chooseTarget(flexRow.modelData.target)
         }
 
         RowLayout {
@@ -178,6 +225,8 @@ Column {
       model: root.auditRows
 
       Item {
+        id: auditRow
+
         required property var modelData
         width: root.width
         implicitHeight: Math.max(auditLabel.implicitHeight, auditTime.implicitHeight)
@@ -187,7 +236,7 @@ Column {
           anchors.left: parent.left
           anchors.right: auditTime.left
           anchors.rightMargin: Style.space(8)
-          text: qsTr("%1 → %2").arg(Model.formatDuration(modelData.seconds)).arg(modelData.label)
+          text: qsTr("%1 → %2").arg(Model.formatDuration(auditRow.modelData.seconds)).arg(auditRow.modelData.label)
           textFormat: Text.PlainText
           color: root.foreground
           font.family: root.fontFamily
@@ -198,7 +247,7 @@ Column {
         Text {
           id: auditTime
           anchors.right: parent.right
-          text: root.timeLabel(modelData.redeemedAt)
+          text: root.timeLabel(auditRow.modelData.redeemedAt)
           textFormat: Text.PlainText
           color: root.dim
           font.family: root.fontFamily

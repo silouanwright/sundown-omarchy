@@ -251,8 +251,11 @@ Panel {
             PanelSectionHeader {
               id: todayHeader
               anchors.left: parent.left
+              anchors.right: todayTotal.left
+              anchors.rightMargin: Style.space(8)
               anchors.verticalCenter: parent.verticalCenter
               text: qsTr("TODAY")
+              elide: Text.ElideRight
               foreground: root.foreground
               fontFamily: root.fontFamily
             }
@@ -369,8 +372,11 @@ Panel {
             PanelSectionHeader {
               id: historyHeader
               anchors.left: parent.left
+              anchors.right: historyTotal.left
+              anchors.rightMargin: Style.space(8)
               anchors.verticalCenter: parent.verticalCenter
               text: qsTr("LAST 7 DAYS")
+              elide: Text.ElideRight
               foreground: root.foreground
               fontFamily: root.fontFamily
             }
@@ -398,6 +404,8 @@ Panel {
               model: root.weekRows
 
               Item {
+                id: weekRow
+
                 required property var modelData
                 width: Math.floor((weekChart.width - weekChart.spacing * 6) / 7)
                 height: weekChart.height
@@ -405,7 +413,7 @@ Panel {
                 Text {
                   anchors.horizontalCenter: parent.horizontalCenter
                   anchors.top: parent.top
-                  text: modelData.recorded ? Model.formatDuration(modelData.seconds) : "—"
+                  text: weekRow.modelData.recorded ? Model.formatDuration(weekRow.modelData.seconds) : "—"
                   textFormat: Text.PlainText
                   color: root.dim
                   font.family: root.fontFamily
@@ -419,59 +427,26 @@ Panel {
                   anchors.bottomMargin: Style.space(5)
                   height: {
                     const available = parent.height - dayLabel.implicitHeight - Style.space(24)
-                    if (!modelData.recorded) return Style.spacing.hairline
-                    if (modelData.seconds <= 0) return Style.space(3)
-                    return Math.max(Style.space(4), Math.round(available * modelData.seconds / root.weekMaximum))
+                    if (!weekRow.modelData.recorded) return Style.spacing.hairline
+                    if (weekRow.modelData.seconds <= 0) return Style.space(3)
+                    return Math.max(Style.space(4), Math.round(available * weekRow.modelData.seconds / root.weekMaximum))
                   }
                   radius: Style.cornerRadius > 0 ? Math.min(width, height) / 2 : 0
-                  color: modelData.date === controller.report.end_date ? Color.accent
-                    : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, modelData.recorded ? 0.55 : 0.12)
+                  color: weekRow.modelData.date === controller.report.end_date ? Color.accent
+                    : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, weekRow.modelData.recorded ? 0.55 : 0.12)
                 }
 
                 Text {
                   id: dayLabel
                   anchors.horizontalCenter: parent.horizontalCenter
                   anchors.bottom: parent.bottom
-                  text: modelData.label
+                  text: weekRow.modelData.label
                   textFormat: Text.PlainText
-                  color: modelData.date === controller.report.end_date ? root.foreground : root.dim
+                  color: weekRow.modelData.date === controller.report.end_date ? root.foreground : root.dim
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.caption
-                  font.bold: modelData.date === controller.report.end_date
+                  font.bold: weekRow.modelData.date === controller.report.end_date
                 }
-              }
-            }
-          }
-
-          Repeater {
-            model: controller.reportKnown ? root.historyCategories : []
-
-            Item {
-              required property var modelData
-              width: content.width
-              implicitHeight: Math.max(historyCategoryLabel.implicitHeight, historyCategoryTime.implicitHeight)
-
-              Text {
-                id: historyCategoryLabel
-                anchors.left: parent.left
-                anchors.right: historyCategoryTime.left
-                anchors.rightMargin: Style.space(8)
-                text: modelData.label
-                textFormat: Text.PlainText
-                color: root.foreground
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.body
-                elide: Text.ElideRight
-              }
-
-              Text {
-                id: historyCategoryTime
-                anchors.right: parent.right
-                text: Model.formatDuration(modelData.seconds)
-                textFormat: Text.PlainText
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.body
               }
             }
           }
@@ -487,6 +462,48 @@ Panel {
             font.pixelSize: Style.font.caption
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
+          }
+
+          PanelSectionHeader {
+            visible: controller.reportKnown && root.historyCategories.length > 0
+            text: qsTr("BREAKDOWN")
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+          }
+
+          Repeater {
+            model: controller.reportKnown ? root.historyCategories : []
+
+            Item {
+              id: historyRow
+
+              required property var modelData
+              width: content.width
+              implicitHeight: Math.max(historyCategoryLabel.implicitHeight, historyCategoryTime.implicitHeight)
+
+              Text {
+                id: historyCategoryLabel
+                anchors.left: parent.left
+                anchors.right: historyCategoryTime.left
+                anchors.rightMargin: Style.space(8)
+                text: historyRow.modelData.label
+                textFormat: Text.PlainText
+                color: root.foreground
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+                elide: Text.ElideRight
+              }
+
+              Text {
+                id: historyCategoryTime
+                anchors.right: parent.right
+                text: Model.formatDuration(historyRow.modelData.seconds)
+                textFormat: Text.PlainText
+                color: root.dim
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+              }
+            }
           }
 
           Text {

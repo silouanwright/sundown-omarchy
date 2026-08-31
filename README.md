@@ -58,6 +58,7 @@ commands is the protocol contract, independent of either package version.
 
 ```bash
 node tests/model.test.js
+tests/run-qml-checks
 omarchy plugin validate .
 ```
 

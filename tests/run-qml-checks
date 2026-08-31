@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+test_dir=$(mktemp -d)
+cleanup() {
+  find "$test_dir" -mindepth 1 -delete
+  rmdir "$test_dir"
+}
+trap cleanup EXIT
+
+ln -s "$repo_dir" "$test_dir/Plugin"
+ln -s /usr/share/omarchy/shell/Commons "$test_dir/Commons"
+ln -s /usr/share/omarchy/shell/Ui "$test_dir/Ui"
+ln -s "$repo_dir/tests/quickshell.qml" "$test_dir/shell.qml"
+
+timeout 10 quickshell --no-color -p "$test_dir/shell.qml"

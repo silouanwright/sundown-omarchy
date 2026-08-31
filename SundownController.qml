@@ -6,6 +6,7 @@ Item {
   id: root
 
   property bool panelOpen: false
+  property string sundownCommand: "/usr/bin/sundown"
   property bool statusKnown: false
   property bool reportKnown: false
   property bool available: false
@@ -25,6 +26,8 @@ Item {
   property string _reportStderr: ""
   property string _flexOutput: ""
   property string _flexStderr: ""
+  property bool _statusCompleted: false
+  property bool _reportCompleted: false
 
   visible: false
   width: 0
@@ -34,6 +37,7 @@ Item {
     if (statusProcess.running) return
     _statusOutput = ""
     _statusStderr = ""
+    _statusCompleted = false
     statusProcess.running = true
   }
 
@@ -41,6 +45,7 @@ Item {
     if (reportProcess.running) return
     _reportOutput = ""
     _reportStderr = ""
+    _reportCompleted = false
     reportProcess.running = true
   }
 
@@ -56,7 +61,7 @@ Item {
     flexError = ""
     _flexOutput = ""
     _flexStderr = ""
-    flexProcess.command = ["/usr/bin/sundown", "flex", "redeem", String(target)]
+    flexProcess.command = [root.sundownCommand, "flex", "redeem", String(target)]
     flexProcess.running = true
   }
 
@@ -68,7 +73,17 @@ Item {
 
   Process {
     id: statusProcess
-    command: ["/usr/bin/sundown", "status", "--json"]
+    command: [root.sundownCommand, "status", "--json"]
+    onRunningChanged: {
+      if (!running && !root._statusCompleted) {
+        root._statusCompleted = true
+        root.statusKnown = true
+        if (!root.everLoaded) root.available = false
+        root.statusError = root.everLoaded
+          ? qsTr("Could not refresh status; showing the last update")
+          : qsTr("Sundown is not available")
+      }
+    }
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -92,6 +107,7 @@ Item {
       onStreamFinished: root._statusStderr = String(text || "").trim()
     }
     onExited: function(exitCode) {
+      root._statusCompleted = true
       root.statusKnown = true
       if (exitCode === 0 && root._statusOutput !== "") return
       if (!root.everLoaded) root.available = false
@@ -130,7 +146,14 @@ Item {
 
   Process {
     id: reportProcess
-    command: ["/usr/bin/sundown", "report", "week", "--json"]
+    command: [root.sundownCommand, "report", "week", "--json"]
+    onRunningChanged: {
+      if (!running && !root._reportCompleted) {
+        root._reportCompleted = true
+        root.reportKnown = true
+        root.reportError = qsTr("Could not load Screen Time history")
+      }
+    }
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -152,6 +175,7 @@ Item {
       onStreamFinished: root._reportStderr = String(text || "").trim()
     }
     onExited: function(exitCode) {
+      root._reportCompleted = true
       root.reportKnown = true
       if (exitCode === 0 && root._reportOutput !== "") return
       root.reportError = root._reportStderr || qsTr("Could not load Screen Time history")
