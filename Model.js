@@ -186,7 +186,8 @@ function budgetRows(status) {
   for (var j = 0; j < groups.length; j++) {
     var group = groups[j] || {}
     if (group.shared_with_steam === true) continue
-    rows.push(budgetRow("app:" + String(group.name || "application-" + j), titleForRule(group.name), group, status))
+    var row = budgetRow("app:" + String(group.name || "application-" + j), titleForRule(group.name), group, status)
+    if (row.restricted) rows.push(row)
   }
   return rows
 }

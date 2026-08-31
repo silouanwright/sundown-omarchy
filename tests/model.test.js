@@ -130,15 +130,12 @@ const adaptiveStatus = context.parseStatus(JSON.stringify({
 })).data
 
 const adaptiveBudgets = context.budgetRows(adaptiveStatus)
-assert.equal(adaptiveBudgets.length, 3)
+assert.equal(adaptiveBudgets.length, 2)
 assert.equal(adaptiveBudgets[0].limit, 8400)
 assert.equal(adaptiveBudgets[0].blockedBy, "prerequisite-gate")
 assert.equal(context.budgetDetail(adaptiveBudgets[0]), "10m in Journaling needed")
-assert.equal(adaptiveBudgets[1].label, "Journaling")
-assert.equal(adaptiveBudgets[1].restricted, false)
-assert.equal(context.budgetDetail(adaptiveBudgets[1]), "Observed activity")
-assert.equal(adaptiveBudgets[2].label, "Other Games")
-assert.equal(context.totalToday(adaptiveBudgets), 2100)
+assert.equal(adaptiveBudgets[1].label, "Other Games")
+assert.equal(context.totalToday(adaptiveBudgets), 1500)
 assert.equal(context.budgetDetail({
   restricted: true,
   blockedBy: "",
