@@ -31,6 +31,30 @@ Column {
   }
   function cursorItem() { return flexSection.visible ? flexSection.cursorItem() : null }
 
+  function gateValue(gate) {
+    if (!gate.synchronized) return qsTr("Syncing")
+    if (gate.kind === "count") {
+      const unit = gate.required === 1 ? qsTr("entry") : qsTr("entries")
+      return qsTr("%1 / %2 %3").arg(gate.used).arg(gate.required).arg(unit)
+    }
+    return qsTr("%1 / %2")
+      .arg(Model.formatDuration(gate.used))
+      .arg(Model.formatDuration(gate.required))
+  }
+
+  function gateDetail(gate) {
+    if (!gate.synchronized) return qsTr("Checking today's activity")
+    if (gate.satisfied)
+      return qsTr("Completed · Unlocked: %1").arg(gate.targets)
+    if (gate.kind === "count") {
+      const unit = gate.remaining === 1 ? qsTr("entry") : qsTr("entries")
+      return qsTr("%1 %2 left · Unlocks: %3")
+        .arg(gate.remaining).arg(unit).arg(gate.targets)
+    }
+    return qsTr("%1 left · Unlocks: %2")
+      .arg(Model.formatDuration(gate.remaining)).arg(gate.targets)
+  }
+
   Text {
     visible: root.controller.statusError !== "" && root.controller.statusCompatibility === ""
     width: parent.width
@@ -127,16 +151,8 @@ Column {
       required property var modelData
       width: root.width
       label: modelData.source
-      value: !modelData.synchronized ? qsTr("Syncing")
-        : modelData.satisfied ? qsTr("Completed")
-        : modelData.kind === "count"
-          ? qsTr("%1 left").arg(modelData.remaining)
-          : qsTr("%1 left").arg(Model.formatDuration(modelData.remaining))
-      detail: !modelData.synchronized
-        ? qsTr("Checking today's activity")
-        : modelData.satisfied
-          ? qsTr("Unlocked: %1").arg(modelData.targets)
-          : qsTr("Unlocks: %1").arg(modelData.targets)
+      value: root.gateValue(modelData)
+      detail: root.gateDetail(modelData)
       ratio: modelData.ratio
       complete: modelData.satisfied
       foreground: root.foreground

@@ -52,6 +52,30 @@ ShellRoot {
     const today = todayViewComponent.createObject(root)
     if (!today || today.implicitHeight <= 0)
       return fail("could not create the Today panel view")
+    const durationGate = {
+      synchronized: true,
+      kind: "duration",
+      used: 616,
+      required: 600,
+      remaining: 0,
+      satisfied: true,
+      targets: "Gaming, Social"
+    }
+    if (today.gateValue(durationGate) !== "10m / 10m"
+        || today.gateDetail(durationGate) !== "Completed · Unlocked: Gaming, Social")
+      return fail("duration prerequisite progress is not explicit")
+    const countGate = {
+      synchronized: true,
+      kind: "count",
+      used: 1,
+      required: 2,
+      remaining: 1,
+      satisfied: false,
+      targets: "Facebook"
+    }
+    if (today.gateValue(countGate) !== "1 / 2 entries"
+        || today.gateDetail(countGate) !== "1 entry left · Unlocks: Facebook")
+      return fail("count prerequisite progress is not explicit")
     today.destroy()
 
     const history = historyViewComponent.createObject(root)
