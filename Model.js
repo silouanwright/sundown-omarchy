@@ -43,6 +43,8 @@ function emptyStatus() {
     apps: { healthy: false, groups: [] },
     flex: { enabled: false, pass_seconds: 0, remaining_uses: 0, eligible: [], redemptions: [] },
     gates: [],
+    completion_gates: [],
+    duration_gates: [],
     earned: []
   }
 }
@@ -99,6 +101,8 @@ function parseStatus(raw) {
   value.flex.eligible = Array.isArray(value.flex.eligible) ? value.flex.eligible : []
   value.flex.redemptions = Array.isArray(value.flex.redemptions) ? value.flex.redemptions : []
   value.gates = Array.isArray(value.gates) ? value.gates : []
+  value.completion_gates = Array.isArray(value.completion_gates) ? value.completion_gates : []
+  value.duration_gates = Array.isArray(value.duration_gates) ? value.duration_gates : []
   value.earned = Array.isArray(value.earned) ? value.earned : []
   return { ok: true, data: value, error: "" }
 }
@@ -134,10 +138,18 @@ function targetLabel(target, status) {
   return titleForRule(parts.length > 1 ? parts.slice(1).join(":") : parts[0])
 }
 
+function evidenceSourceLabel(source, fallbackName) {
+  var known = {
+    "/apps/voice-journal/daily-entry": "Journal",
+    "/apps/voice-journal/recorded-duration": "Journal"
+  }
+  return known[String(source || "")] || titleForRule(fallbackName || "Prerequisite")
+}
+
 function gateForTarget(status, target) {
-  var gates = status && Array.isArray(status.gates) ? status.gates : []
+  var gates = gateRows(status)
   for (var i = 0; i < gates.length; i++) {
-    var targets = Array.isArray(gates[i].targets) ? gates[i].targets : []
+    var targets = gates[i].targetIds
     if (targets.some(function(candidate) {
       return String(candidate).toLowerCase() === String(target).toLowerCase()
     })) return gates[i]
@@ -211,7 +223,9 @@ function budgetDetail(row) {
   if (row.blockedBy === "schedule") return "Outside schedule"
   if (row.blockedBy === "prerequisite-gate") {
     var gate = row.gate || {}
-    return formatDuration(gate.remaining_seconds) + " in " + titleForRule(gate.source_group) + " needed"
+    if (gate.kind === "count")
+      return String(gate.remaining) + " more " + gate.source + (gate.remaining === 1 ? " entry needed" : " entries needed")
+    return formatDuration(gate.remaining) + " of " + gate.source + " needed"
   }
   if (row.blockedBy === "pace-limit") return "Rolling limit reached"
   if (row.blockedBy === "daily-limit") return "Blocked for today"
@@ -225,14 +239,19 @@ function budgetDetail(row) {
 }
 
 function gateRows(status) {
-  var gates = status && Array.isArray(status.gates) ? status.gates : []
-  return gates.map(function(gate) {
+  status = status || emptyStatus()
+  var rows = []
+  var gates = Array.isArray(status.gates) ? status.gates : []
+  gates.forEach(function(gate) {
     var required = Math.max(0, number(gate.required_seconds, 0))
     var used = Math.max(0, number(gate.used_seconds, 0))
-    return {
+    var targetIds = Array.isArray(gate.targets) ? gate.targets : []
+    rows.push({
+      kind: "duration",
       name: String(gate.name || "Prerequisite"),
       source: titleForRule(gate.source_group),
-      targets: (Array.isArray(gate.targets) ? gate.targets : []).map(function(target) {
+      targetIds: targetIds,
+      targets: targetIds.map(function(target) {
         return targetLabel(target, status)
       }).join(", "),
       used: used,
@@ -240,8 +259,45 @@ function gateRows(status) {
       remaining: Math.max(0, number(gate.remaining_seconds, required - used)),
       ratio: required > 0 ? clamp(used / required, 0, 1) : 0,
       satisfied: gate.satisfied === true
-    }
+    })
   })
+  var completionGates = Array.isArray(status.completion_gates) ? status.completion_gates : []
+  completionGates.forEach(function(gate) {
+    var required = Math.max(0, number(gate.required_completions, 0))
+    var used = Math.max(0, number(gate.active_completions, 0))
+    var targetIds = Array.isArray(gate.targets) ? gate.targets : []
+    rows.push({
+      kind: "count",
+      name: String(gate.name || "Prerequisite"),
+      source: evidenceSourceLabel(gate.source, gate.name),
+      targetIds: targetIds,
+      targets: targetIds.map(function(target) { return targetLabel(target, status) }).join(", "),
+      used: used,
+      required: required,
+      remaining: Math.max(0, number(gate.remaining_completions, required - used)),
+      ratio: required > 0 ? clamp(used / required, 0, 1) : 0,
+      satisfied: gate.satisfied === true
+    })
+  })
+  var durationGates = Array.isArray(status.duration_gates) ? status.duration_gates : []
+  durationGates.forEach(function(gate) {
+    var required = Math.max(0, number(gate.required_seconds, 0))
+    var used = Math.max(0, number(gate.recorded_seconds, 0))
+    var targetIds = Array.isArray(gate.targets) ? gate.targets : []
+    rows.push({
+      kind: "duration",
+      name: String(gate.name || "Prerequisite"),
+      source: evidenceSourceLabel(gate.source, gate.name),
+      targetIds: targetIds,
+      targets: targetIds.map(function(target) { return targetLabel(target, status) }).join(", "),
+      used: used,
+      required: required,
+      remaining: Math.max(0, number(gate.remaining_seconds, required - used)),
+      ratio: required > 0 ? clamp(used / required, 0, 1) : 0,
+      satisfied: gate.satisfied === true
+    })
+  })
+  return rows
 }
 
 function earnedRows(status) {

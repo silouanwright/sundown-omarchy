@@ -151,7 +151,7 @@ assert.equal(adaptiveBudgets[0].meterLimit, 3600)
 assert.equal(adaptiveBudgets[0].meterRatio, 1 / 3)
 assert.equal(adaptiveBudgets[0].meterScope, "rolling")
 assert.equal(adaptiveBudgets[0].blockedBy, "prerequisite-gate")
-assert.equal(context.budgetDetail(adaptiveBudgets[0]), "10m in Journaling needed")
+assert.equal(context.budgetDetail(adaptiveBudgets[0]), "10m of Journaling needed")
 assert.equal(adaptiveBudgets[1].label, "Other Games")
 assert.equal(context.totalToday(adaptiveBudgets), 1500)
 assert.equal(context.budgetDetail({
@@ -174,6 +174,42 @@ assert.equal(context.budgetRows(context.parseStatus(JSON.stringify({
   }
 })).data)[0].meterRatio, 1)
 assert.equal(context.gateRows(adaptiveStatus)[0].ratio, 0.5)
+
+const journalStatus = context.parseStatus(JSON.stringify({
+  version: 1,
+  steam: {
+    daily_limit_seconds: 7200,
+    used_seconds: 0,
+    available_seconds: 0,
+    blocked_by: "prerequisite-gate"
+  },
+  duration_gates: [{
+    name: "journal-before-distractions",
+    source: "/apps/voice-journal/recorded-duration",
+    targets: ["steam", "web:social"],
+    recorded_seconds: 420,
+    required_seconds: 600,
+    remaining_seconds: 180,
+    satisfied: false
+  }],
+  completion_gates: [{
+    name: "two-entries",
+    source: "/apps/voice-journal/daily-entry",
+    targets: ["web:facebook"],
+    active_completions: 1,
+    required_completions: 2,
+    remaining_completions: 1,
+    satisfied: false
+  }]
+})).data
+const journalGates = context.gateRows(journalStatus)
+assert.equal(journalGates.length, 2)
+assert.equal(journalGates[0].source, "Journal")
+assert.equal(journalGates[0].kind, "count")
+assert.equal(journalGates[0].remaining, 1)
+assert.equal(journalGates[1].source, "Journal")
+assert.equal(journalGates[1].ratio, 0.7)
+assert.equal(context.budgetDetail(context.budgetRows(journalStatus)[0]), "3m of Journal needed")
 assert.equal(context.earnedRows(adaptiveStatus)[0].bank, 300)
 assert.equal(context.flexTargets(adaptiveStatus)[1].label, "Other Games")
 assert.deepEqual(context.flexAuditRows(adaptiveStatus).map(row => row.label), ["Other Games", "Steam"])
