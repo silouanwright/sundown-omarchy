@@ -41,10 +41,15 @@ const budgets = context.budgetRows(status)
 assert.equal(budgets.length, 2)
 assert.equal(budgets[0].label, "Steam")
 assert.equal(budgets[0].ratio, 0.5)
+assert.equal(budgets[0].meterRatio, 0.5)
+assert.equal(budgets[0].meterScope, "daily")
 assert.equal(budgets[1].label, "Social")
 assert.equal(context.totalToday(budgets), 4200)
 assert.equal(context.formatDuration(59), "<1m")
 assert.equal(context.formatDuration(7260), "2h 1m")
+assert.equal(context.minutesUntil("2026-09-01T11:18:01-05:00", "2026-09-01T11:11:30-05:00"), 7)
+assert.equal(context.minutesUntil("2026-09-01T11:18:01-05:00", "2026-09-01T11:18:02-05:00"), 0)
+assert.equal(context.minutesUntil("not-a-time", "2026-09-01T11:18:02-05:00"), null)
 assert.equal(context.browserNeedsAttention({
   web: { browser_active: false, healthy: false, enforcement_ready: false }
 }), false)
@@ -141,6 +146,10 @@ const adaptiveStatus = context.parseStatus(JSON.stringify({
 const adaptiveBudgets = context.budgetRows(adaptiveStatus)
 assert.equal(adaptiveBudgets.length, 2)
 assert.equal(adaptiveBudgets[0].limit, 8400)
+assert.equal(adaptiveBudgets[0].meterUsed, 1200)
+assert.equal(adaptiveBudgets[0].meterLimit, 3600)
+assert.equal(adaptiveBudgets[0].meterRatio, 1 / 3)
+assert.equal(adaptiveBudgets[0].meterScope, "rolling")
 assert.equal(adaptiveBudgets[0].blockedBy, "prerequisite-gate")
 assert.equal(context.budgetDetail(adaptiveBudgets[0]), "10m in Journaling needed")
 assert.equal(adaptiveBudgets[1].label, "Other Games")
@@ -149,8 +158,21 @@ assert.equal(context.budgetDetail({
   restricted: true,
   blockedBy: "",
   remaining: 2400,
-  pace: { used_seconds: 1200, limit_seconds: 3600, window_seconds: 10800 }
-}), "20m / 1h · 3h rolling")
+  pace: { used_seconds: 1200, limit_seconds: 3600, window_seconds: 10800, remaining_seconds: 2400 }
+}), "40m rolling remaining")
+assert.equal(context.budgetDetail({
+  restricted: true,
+  blockedBy: "",
+  pace: { used_seconds: 3600, limit_seconds: 3600, window_seconds: 10800, remaining_seconds: 0 }
+}), "Rolling allowance spent")
+assert.equal(context.budgetRows(context.parseStatus(JSON.stringify({
+  version: 1,
+  steam: {
+    daily_limit_seconds: 7200,
+    used_seconds: 1200,
+    pace: { used_seconds: 905, limit_seconds: 900, window_seconds: 3600, remaining_seconds: 0 }
+  }
+})).data)[0].meterRatio, 1)
 assert.equal(context.gateRows(adaptiveStatus)[0].ratio, 0.5)
 assert.equal(context.earnedRows(adaptiveStatus)[0].bank, 300)
 assert.equal(context.flexTargets(adaptiveStatus)[1].label, "Other Games")

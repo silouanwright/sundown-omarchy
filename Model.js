@@ -159,6 +159,8 @@ function budgetRow(id, label, value, status) {
   var gate = gateForTarget(status, id)
   var schedule = value.schedule || null
   var pace = value.pace || null
+  var meterUsed = pace ? Math.max(0, number(pace.used_seconds, 0)) : used
+  var meterLimit = pace ? Math.max(0, number(pace.limit_seconds, 0)) : limit
   return {
     id: id,
     label: label,
@@ -167,6 +169,10 @@ function budgetRow(id, label, value, status) {
     limit: limit,
     remaining: remaining,
     ratio: limit > 0 ? clamp(used / limit, 0, 1) : 0,
+    meterUsed: meterUsed,
+    meterLimit: meterLimit,
+    meterRatio: meterLimit > 0 ? clamp(meterUsed / meterLimit, 0, 1) : 0,
+    meterScope: pace ? "rolling" : "daily",
     active: value.active === true,
     blocked: blockedBy !== "" || value.action_due === true,
     reached: blockedBy === "daily-limit" || value.limit_reached === true,
@@ -209,9 +215,12 @@ function budgetDetail(row) {
   }
   if (row.blockedBy === "pace-limit") return "Rolling limit reached"
   if (row.blockedBy === "daily-limit") return "Blocked for today"
-  if (row.pace) return formatDuration(row.pace.used_seconds) + " / "
-    + formatDuration(row.pace.limit_seconds) + " · "
-    + formatDuration(row.pace.window_seconds) + " rolling"
+  if (row.pace) {
+    var paceRemaining = Math.max(0, number(row.pace.remaining_seconds, 0))
+    return paceRemaining > 0
+      ? formatDuration(paceRemaining) + " rolling remaining"
+      : "Rolling allowance spent"
+  }
   return formatDuration(row.remaining) + " remaining"
 }
 
@@ -282,6 +291,13 @@ function formatDuration(seconds) {
   if (hours > 0 && minutes > 0) return hours + "h " + minutes + "m"
   if (hours > 0) return hours + "h"
   return minutes + "m"
+}
+
+function minutesUntil(value, now) {
+  var target = new Date(String(value || ""))
+  var current = now === undefined ? new Date() : new Date(now)
+  if (isNaN(target.getTime()) || isNaN(current.getTime())) return null
+  return Math.max(0, Math.ceil((target.getTime() - current.getTime()) / 60000))
 }
 
 function formatCountdown(seconds) {

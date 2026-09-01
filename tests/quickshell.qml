@@ -32,6 +32,14 @@ ShellRoot {
     section.destroy()
   }
 
+  function checkRollingBudgetRow() {
+    const row = rollingBudgetComponent.createObject(root)
+    if (!row) return fail("could not create rolling BudgetRow")
+    if (row.metaText !== "19m / 45m today · 1h window · 15m flex")
+      return fail("rolling BudgetRow did not preserve daily and flex context")
+    row.destroy()
+  }
+
   Component {
     id: controllerComponent
     Plugin.SundownController {
@@ -59,6 +67,37 @@ ShellRoot {
     }
   }
 
+  Component {
+    id: rollingBudgetComponent
+    Plugin.BudgetRow {
+      width: 380
+      modelData: ({
+        label: "Social",
+        restricted: true,
+        used: 1165,
+        limit: 2700,
+        meterUsed: 905,
+        meterLimit: 900,
+        meterRatio: 1,
+        active: false,
+        blocked: true,
+        blockedBy: "pace-limit",
+        gate: null,
+        schedule: null,
+        pace: {
+          limit_seconds: 900,
+          window_seconds: 3600,
+          used_seconds: 905,
+          remaining_seconds: 0,
+          next_refill_at: "2026-09-01T11:18:49-05:00"
+        },
+        flexRemaining: 900,
+        earnedBank: 0,
+        warningMinutes: null
+      })
+    }
+  }
+
   Timer {
     interval: 25
     running: true
@@ -71,6 +110,7 @@ ShellRoot {
             || root.controller.reportError !== qsTr("Could not load Screen Time history"))
           return root.fail("failed commands did not settle into their error states")
         root.checkFlexSection()
+        root.checkRollingBudgetRow()
         console.log("QML checks passed")
         Qt.quit()
       } else if (root.attempts >= 200) {

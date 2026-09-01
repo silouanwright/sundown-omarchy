@@ -9,6 +9,20 @@ Column {
   property color foreground: Color.popups.text
   property color dim: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.62)
   property string fontFamily: Style.font.family
+  readonly property string metaText: {
+    const parts = []
+    if (modelData.pace) {
+      parts.push(qsTr("%1 / %2 today")
+        .arg(Model.formatDuration(modelData.used))
+        .arg(Model.formatDuration(modelData.limit)))
+      parts.push(qsTr("%1 window").arg(Model.formatDuration(modelData.pace.window_seconds)))
+    }
+    if (modelData.earnedBank > 0)
+      parts.push(qsTr("%1 earned").arg(Model.formatDuration(modelData.earnedBank)))
+    if (modelData.flexRemaining > 0)
+      parts.push(qsTr("%1 flex").arg(Model.formatDuration(modelData.flexRemaining)))
+    return parts.join(qsTr(" · "))
+  }
 
   width: parent ? parent.width : implicitWidth
   spacing: Style.space(5)
@@ -21,8 +35,14 @@ Column {
   function timingHint() {
     if (modelData.blockedBy === "schedule" && modelData.schedule)
       return qsTr("Opens %1").arg(timeLabel(modelData.schedule.next_change_at))
-    if (modelData.blockedBy === "pace-limit" && modelData.pace && modelData.pace.next_refill_at)
-      return qsTr("Returns %1").arg(timeLabel(modelData.pace.next_refill_at))
+    if (modelData.blockedBy === "pace-limit" && modelData.pace && modelData.pace.next_refill_at) {
+      const minutes = Model.minutesUntil(modelData.pace.next_refill_at)
+      if (minutes === null) return ""
+      if (minutes === 0) return qsTr("Returns now")
+      return qsTr("Returns in %1m · %2")
+        .arg(minutes)
+        .arg(timeLabel(modelData.pace.next_refill_at))
+    }
     if (modelData.schedule && modelData.schedule.allowed)
       return qsTr("Closes %1").arg(timeLabel(modelData.schedule.next_change_at))
     if (modelData.warningMinutes !== null)
@@ -52,7 +72,7 @@ Column {
       id: budgetTime
       anchors.right: parent.right
       text: root.modelData.restricted
-        ? Model.formatDuration(root.modelData.used) + " / " + Model.formatDuration(root.modelData.limit)
+        ? Model.formatDuration(root.modelData.meterUsed) + " / " + Model.formatDuration(root.modelData.meterLimit)
         : qsTr("%1 tracked").arg(Model.formatDuration(root.modelData.used))
       textFormat: Text.PlainText
       color: root.modelData.blocked ? Color.urgent : root.dim
@@ -70,7 +90,7 @@ Column {
     Accessible.ignored: true
 
     Rectangle {
-      width: Math.round(parent.width * root.modelData.ratio)
+      width: Math.round(parent.width * root.modelData.meterRatio)
       height: parent.height
       radius: parent.radius
       color: root.modelData.blocked ? Color.urgent
@@ -110,15 +130,9 @@ Column {
   }
 
   Text {
-    visible: root.modelData.restricted
-      && (root.modelData.earnedBank > 0 || root.modelData.flexRemaining > 0)
+    visible: root.modelData.restricted && root.metaText !== ""
     width: parent.width
-    text: [
-      root.modelData.earnedBank > 0
-        ? qsTr("%1 earned").arg(Model.formatDuration(root.modelData.earnedBank)) : "",
-      root.modelData.flexRemaining > 0
-        ? qsTr("%1 flex").arg(Model.formatDuration(root.modelData.flexRemaining)) : ""
-    ].filter(function(value) { return value !== "" }).join(qsTr(" · "))
+    text: root.metaText
     textFormat: Text.PlainText
     color: root.dim
     font.family: root.fontFamily
