@@ -210,6 +210,31 @@ assert.equal(journalGates[0].remaining, 1)
 assert.equal(journalGates[1].source, "Journal")
 assert.equal(journalGates[1].ratio, 0.7)
 assert.equal(context.budgetDetail(context.budgetRows(journalStatus)[0]), "3m of Journal needed")
+
+const syncingStatus = context.parseStatus(JSON.stringify({
+  version: 1,
+  steam: {
+    name: "gaming",
+    daily_limit_seconds: 7200,
+    used_seconds: 0,
+    remaining_seconds: 7200,
+    available_seconds: 0,
+    blocked_by: "prerequisite-gate"
+  },
+  duration_gates: [{
+    name: "journal-before-distractions",
+    source: "/apps/voice-journal/recorded-duration",
+    targets: ["steam"],
+    recorded_seconds: 0,
+    required_seconds: 600,
+    remaining_seconds: 600,
+    synchronized: false,
+    satisfied: false
+  }]
+})).data
+assert.equal(context.gateRows(syncingStatus)[0].synchronized, false)
+assert.equal(context.budgetDetail(context.budgetRows(syncingStatus)[0]), "Syncing Journal")
+
 assert.equal(context.earnedRows(adaptiveStatus)[0].bank, 300)
 assert.equal(context.flexTargets(adaptiveStatus)[1].label, "Other Games")
 assert.deepEqual(context.flexAuditRows(adaptiveStatus).map(row => row.label), ["Other Games", "Steam"])

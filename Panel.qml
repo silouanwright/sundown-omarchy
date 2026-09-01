@@ -303,13 +303,16 @@ Panel {
               required property var modelData
               width: content.width
               label: modelData.source
-              value: modelData.satisfied ? qsTr("Ready")
+              value: !modelData.synchronized ? qsTr("Syncing")
+                : modelData.satisfied ? qsTr("Ready")
                 : modelData.kind === "count"
                   ? qsTr("%1 left").arg(modelData.remaining)
                   : qsTr("%1 left").arg(Model.formatDuration(modelData.remaining))
-              detail: modelData.satisfied
-                ? qsTr("%1 unlocked").arg(modelData.targets)
-                : qsTr("Unlocks %1").arg(modelData.targets)
+              detail: !modelData.synchronized
+                ? qsTr("Checking today's activity")
+                : modelData.satisfied
+                  ? qsTr("%1 unlocked").arg(modelData.targets)
+                  : qsTr("Unlocks %1").arg(modelData.targets)
               ratio: modelData.ratio
               complete: modelData.satisfied
               foreground: root.foreground

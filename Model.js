@@ -223,6 +223,7 @@ function budgetDetail(row) {
   if (row.blockedBy === "schedule") return "Outside schedule"
   if (row.blockedBy === "prerequisite-gate") {
     var gate = row.gate || {}
+    if (gate.synchronized === false) return "Syncing " + gate.source
     if (gate.kind === "count")
       return String(gate.remaining) + " more " + gate.source + (gate.remaining === 1 ? " entry needed" : " entries needed")
     return formatDuration(gate.remaining) + " of " + gate.source + " needed"
@@ -258,6 +259,7 @@ function gateRows(status) {
       required: required,
       remaining: Math.max(0, number(gate.remaining_seconds, required - used)),
       ratio: required > 0 ? clamp(used / required, 0, 1) : 0,
+      synchronized: true,
       satisfied: gate.satisfied === true
     })
   })
@@ -276,6 +278,7 @@ function gateRows(status) {
       required: required,
       remaining: Math.max(0, number(gate.remaining_completions, required - used)),
       ratio: required > 0 ? clamp(used / required, 0, 1) : 0,
+      synchronized: gate.synchronized !== false,
       satisfied: gate.satisfied === true
     })
   })
@@ -294,6 +297,7 @@ function gateRows(status) {
       required: required,
       remaining: Math.max(0, number(gate.remaining_seconds, required - used)),
       ratio: required > 0 ? clamp(used / required, 0, 1) : 0,
+      synchronized: gate.synchronized !== false,
       satisfied: gate.satisfied === true
     })
   })
