@@ -474,29 +474,6 @@ function reportCategories(report, status) {
   return rows
 }
 
-function clockSeconds(value) {
-  var match = /^(\d{1,2}):(\d{2})$/.exec(String(value || ""))
-  if (!match) return null
-  return Number(match[1]) * 3600 + Number(match[2]) * 60
-}
-
-function dayWindow(status) {
-  status = status || emptyStatus()
-  var curfew = status.curfew || {}
-  var opens = clockSeconds(curfew.end)
-  var closes = clockSeconds(curfew.start)
-  if (opens === null || closes === null) return { ratio: 0, remaining: 0 }
-  var length = closes - opens
-  if (length <= 0) length += 86400
-  var remaining = Math.max(0, number(curfew.seconds_until_start, 0))
-  var now = new Date()
-  var nowSeconds = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds()
-  var ratio
-  if (curfew.active === true) ratio = nowSeconds < opens ? 0 : 1
-  else ratio = clamp((length - Math.min(length, remaining)) / length, 0, 1)
-  return { ratio: ratio, remaining: remaining }
-}
-
 function recordedDaysLabel(count) {
   var total = Math.max(0, Math.floor(number(count, 0)))
   return total + " recorded " + (total === 1 ? "day" : "days")

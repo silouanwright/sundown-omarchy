@@ -79,7 +79,6 @@ const gamingStatus = context.parseStatus(JSON.stringify({
 })).data
 assert.deepEqual(context.budgetRows(gamingStatus).map(row => row.label), ["Gaming"])
 assert.equal(context.totalToday(context.budgetRows(gamingStatus)), 5400)
-assert.equal(context.dayWindow(gamingStatus).remaining, 7200)
 
 const adaptiveStatus = context.parseStatus(JSON.stringify({
   version: 1,
