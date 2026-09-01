@@ -160,8 +160,8 @@ Column {
       detail: !modelData.synchronized
         ? qsTr("Checking today's activity")
         : modelData.satisfied
-          ? qsTr("%1 unlocked").arg(modelData.targets)
-          : qsTr("Unlocks %1").arg(modelData.targets)
+          ? qsTr("Unlocked: %1").arg(modelData.targets)
+          : qsTr("Unlocks: %1").arg(modelData.targets)
       ratio: modelData.ratio
       complete: modelData.satisfied
       foreground: root.foreground
