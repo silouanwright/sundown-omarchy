@@ -183,6 +183,11 @@ ShellRoot {
     }
   }
 
+  Component {
+    id: fullPanelComponent
+    Plugin.Panel {}
+  }
+
   Timer {
     interval: 25
     running: true

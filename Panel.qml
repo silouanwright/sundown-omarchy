@@ -265,7 +265,7 @@ Panel {
           Loader {
             id: viewLoader
             width: content.width
-            implicitHeight: item ? item.implicitHeight : 0
+            height: item ? item.implicitHeight : 0
             sourceComponent: root.currentView === "history" ? historyViewComponent : todayViewComponent
           }
 
