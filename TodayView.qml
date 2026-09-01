@@ -12,7 +12,6 @@ Column {
   property var budgetRows: []
   property var gateRows: []
   property var earnedRows: []
-  property var dayWindow: ({ ratio: 0, remaining: 0 })
   property bool browserAttention: false
   property color foreground: Color.popups.text
   property color dim: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.62)
@@ -25,36 +24,12 @@ Column {
   width: parent ? parent.width : implicitWidth
   spacing: Style.space(14)
 
-  function clockLabel(value) {
-    const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || ""))
-    if (!match) return String(value || "")
-    const date = new Date(2000, 0, 1, Number(match[1]), Number(match[2]))
-    return date.toLocaleTimeString(Qt.locale(), Locale.ShortFormat)
-  }
-
   function resetCursor() { flexSection.resetCursor() }
   function moveCursor(delta) { if (flexSection.visible) flexSection.moveCursor(delta) }
   function activateCursor() {
     if (flexSection.visible && flexSection.cursorActive) flexSection.activateCursor()
   }
   function cursorItem() { return flexSection.visible ? flexSection.cursorItem() : null }
-
-  PolicyProgressRow {
-    visible: root.controller.statusKnown && root.controller.statusCompatibility === ""
-    label: qsTr("Usable day")
-    value: qsTr("%1–%2")
-      .arg(root.clockLabel(root.controller.status.curfew.end))
-      .arg(root.clockLabel(root.controller.status.curfew.start))
-    detail: root.controller.status.curfew.active
-      ? qsTr("Curfew is active")
-      : qsTr("%1 until curfew").arg(Model.formatCountdown(root.dayWindow.remaining))
-    ratio: root.dayWindow.ratio
-    complete: root.controller.status.curfew.active && root.dayWindow.ratio >= 1
-    active: !root.controller.status.curfew.active
-    foreground: root.foreground
-    dim: root.dim
-    fontFamily: root.fontFamily
-  }
 
   Text {
     visible: root.controller.statusError !== "" && root.controller.statusCompatibility === ""

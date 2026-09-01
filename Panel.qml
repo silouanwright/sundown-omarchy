@@ -168,7 +168,6 @@ Panel {
       budgetRows: root.budgetRows
       gateRows: root.gateRows
       earnedRows: root.earnedRows
-      dayWindow: root.dayWindow
       browserAttention: root.browserAttention
       foreground: root.foreground
       dim: root.dim
@@ -244,6 +243,23 @@ Panel {
             detail: root.heroPill()
             foreground: root.foreground
             fontFamily: root.fontFamily
+          }
+
+          Rectangle {
+            visible: controller.statusKnown && controller.statusCompatibility === ""
+            width: parent.width
+            height: Style.space(4)
+            radius: Style.cornerRadius > 0 ? height / 2 : 0
+            color: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.12)
+            Accessible.ignored: true
+
+            Rectangle {
+              width: Math.round(parent.width * root.dayWindow.ratio)
+              height: parent.height
+              radius: parent.radius
+              color: Color.accent
+              Accessible.ignored: true
+            }
           }
 
           Item {

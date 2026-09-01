@@ -166,7 +166,6 @@ ShellRoot {
     Plugin.TodayView {
       width: 380
       controller: fakeController
-      dayWindow: ({ ratio: 0.5, remaining: 3600 })
     }
   }
 
