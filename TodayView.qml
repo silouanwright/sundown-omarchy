@@ -153,7 +153,7 @@ Column {
       width: root.width
       label: modelData.source
       value: !modelData.synchronized ? qsTr("Syncing")
-        : modelData.satisfied ? qsTr("Ready")
+        : modelData.satisfied ? qsTr("Completed")
         : modelData.kind === "count"
           ? qsTr("%1 left").arg(modelData.remaining)
           : qsTr("%1 left").arg(Model.formatDuration(modelData.remaining))

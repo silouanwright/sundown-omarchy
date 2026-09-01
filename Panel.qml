@@ -55,11 +55,16 @@ Panel {
     })
   }
 
-  function showView(view) {
-    currentView = view === "history" ? "history" : "today"
+  function resetScroll() {
     const flick = scrollArea.contentItem
     if (flick && flick.contentY !== undefined) flick.contentY = 0
+  }
+
+  function showView(view) {
+    currentView = view === "history" ? "history" : "today"
+    resetScroll()
     Qt.callLater(function() {
+      root.resetScroll()
       if (root.currentView === "today" && viewLoader.item && viewLoader.item.resetCursor)
         viewLoader.item.resetCursor()
     })
@@ -267,6 +272,7 @@ Panel {
             width: content.width
             height: item ? item.implicitHeight : 0
             sourceComponent: root.currentView === "history" ? historyViewComponent : todayViewComponent
+            onLoaded: Qt.callLater(root.resetScroll)
           }
 
           Text {
