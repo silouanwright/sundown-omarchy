@@ -40,6 +40,14 @@ ShellRoot {
     row.destroy()
   }
 
+  function checkWeekChart() {
+    const chart = weekChartComponent.createObject(root)
+    if (!chart) return fail("could not create WeekChart")
+    if (chart.cellWidth <= chart.columnWidth || chart.plotHeight <= 0)
+      return fail("WeekChart columns do not fit their day cells")
+    chart.destroy()
+  }
+
   Component {
     id: controllerComponent
     Plugin.SundownController {
@@ -98,6 +106,24 @@ ShellRoot {
     }
   }
 
+  Component {
+    id: weekChartComponent
+    Plugin.WeekChart {
+      width: 380
+      maximum: 21420
+      currentDate: "2026-09-01"
+      rows: [
+        { date: "2026-08-26", label: "W", seconds: 0, recorded: false },
+        { date: "2026-08-27", label: "T", seconds: 0, recorded: false },
+        { date: "2026-08-28", label: "F", seconds: 0, recorded: false },
+        { date: "2026-08-29", label: "S", seconds: 12600, recorded: true },
+        { date: "2026-08-30", label: "S", seconds: 21420, recorded: true },
+        { date: "2026-08-31", label: "M", seconds: 6060, recorded: true },
+        { date: "2026-09-01", label: "T", seconds: 4080, recorded: true }
+      ]
+    }
+  }
+
   Timer {
     interval: 25
     running: true
@@ -111,6 +137,7 @@ ShellRoot {
           return root.fail("failed commands did not settle into their error states")
         root.checkFlexSection()
         root.checkRollingBudgetRow()
+        root.checkWeekChart()
         console.log("QML checks passed")
         Qt.quit()
       } else if (root.attempts >= 200) {

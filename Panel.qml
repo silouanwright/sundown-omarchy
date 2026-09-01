@@ -394,62 +394,15 @@ Panel {
             }
           }
 
-          Row {
-            id: weekChart
+          WeekChart {
             visible: root.weekRows.length > 0
             width: parent.width
-            height: Style.space(78)
-            spacing: Style.space(6)
-
-            Repeater {
-              model: root.weekRows
-
-              Item {
-                id: weekRow
-
-                required property var modelData
-                width: Math.floor((weekChart.width - weekChart.spacing * 6) / 7)
-                height: weekChart.height
-
-                Text {
-                  anchors.horizontalCenter: parent.horizontalCenter
-                  anchors.top: parent.top
-                  text: weekRow.modelData.recorded ? Model.formatDuration(weekRow.modelData.seconds) : "—"
-                  textFormat: Text.PlainText
-                  color: root.dim
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                }
-
-                Rectangle {
-                  anchors.left: parent.left
-                  anchors.right: parent.right
-                  anchors.bottom: dayLabel.top
-                  anchors.bottomMargin: Style.space(5)
-                  height: {
-                    const available = parent.height - dayLabel.implicitHeight - Style.space(24)
-                    if (!weekRow.modelData.recorded) return Style.spacing.hairline
-                    if (weekRow.modelData.seconds <= 0) return Style.space(3)
-                    return Math.max(Style.space(4), Math.round(available * weekRow.modelData.seconds / root.weekMaximum))
-                  }
-                  radius: Style.cornerRadius > 0 ? Math.min(width, height) / 2 : 0
-                  color: weekRow.modelData.date === controller.report.end_date ? Color.accent
-                    : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, weekRow.modelData.recorded ? 0.55 : 0.12)
-                }
-
-                Text {
-                  id: dayLabel
-                  anchors.horizontalCenter: parent.horizontalCenter
-                  anchors.bottom: parent.bottom
-                  text: weekRow.modelData.label
-                  textFormat: Text.PlainText
-                  color: weekRow.modelData.date === controller.report.end_date ? root.foreground : root.dim
-                  font.family: root.fontFamily
-                  font.pixelSize: Style.font.caption
-                  font.bold: weekRow.modelData.date === controller.report.end_date
-                }
-              }
-            }
+            rows: root.weekRows
+            maximum: root.weekMaximum
+            currentDate: controller.report.end_date
+            foreground: root.foreground
+            dim: root.dim
+            fontFamily: root.fontFamily
           }
 
           Text {
