@@ -15,7 +15,8 @@ Column {
   property string fontFamily: Style.font.family
   readonly property real cellSpacing: Style.space(6)
   readonly property real cellWidth: Math.floor((width - cellSpacing * 6) / 7)
-  readonly property real columnWidth: Math.min(Style.space(14), cellWidth - Style.space(4))
+  readonly property real columnWidth: Math.min(cellWidth - Style.space(8),
+    Math.max(Style.space(20), Math.round(cellWidth * 0.46)))
   readonly property real plotHeight: Style.space(58)
 
   width: parent ? parent.width : implicitWidth
@@ -63,7 +64,9 @@ Column {
             font.pixelSize: Style.font.caption
           }
 
-          Rectangle {
+          Item {
+            id: usageColumn
+
             visible: columnCell.modelData.recorded
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom
@@ -74,11 +77,28 @@ Column {
               return Math.max(Style.space(3),
                 Math.round(available * columnCell.modelData.seconds / Math.max(1, root.maximum)))
             }
-            radius: Style.cornerRadius > 0
-              ? Math.min(Style.space(2), width / 2, height / 2) : 0
-            color: columnCell.modelData.date === root.currentDate ? Color.accent
+            readonly property real topRadius: Style.cornerRadius > 0
+              ? Math.min(Style.space(4), width / 2, height) : 0
+            readonly property color fillColor: columnCell.modelData.date === root.currentDate ? Color.accent
               : Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.55)
             Accessible.ignored: true
+
+            Rectangle {
+              anchors.fill: parent
+              radius: usageColumn.topRadius
+              color: usageColumn.fillColor
+              Accessible.ignored: true
+            }
+
+            Rectangle {
+              visible: usageColumn.topRadius > 0
+              anchors.left: parent.left
+              anchors.right: parent.right
+              anchors.bottom: parent.bottom
+              height: Math.min(usageColumn.topRadius, parent.height / 2)
+              color: usageColumn.fillColor
+              Accessible.ignored: true
+            }
           }
         }
       }
