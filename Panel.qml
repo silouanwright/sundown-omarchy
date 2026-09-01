@@ -19,6 +19,8 @@ Panel {
   readonly property var historyCategories: Model.reportCategories(controller.report, controller.status)
   readonly property var dayWindow: Model.dayWindow(controller.status)
   readonly property real weekMaximum: Model.maximumDay(weekRows)
+  readonly property var controllerForViews: controller
+  property string currentView: "today"
   readonly property bool browserAttention: controller.statusKnown
     && Model.browserNeedsAttention(controller.status)
   readonly property bool attention: controller.statusKnown && (
@@ -50,6 +52,16 @@ Panel {
         flick.contentY = Math.max(0, top - margin)
       else if (bottom > flick.contentY + flick.height - margin)
         flick.contentY = Math.min(maximum, bottom + margin - flick.height)
+    })
+  }
+
+  function showView(view) {
+    currentView = view === "history" ? "history" : "today"
+    const flick = scrollArea.contentItem
+    if (flick && flick.contentY !== undefined) flick.contentY = 0
+    Qt.callLater(function() {
+      if (root.currentView === "today" && viewLoader.item && viewLoader.item.resetCursor)
+        viewLoader.item.resetCursor()
     })
   }
 
@@ -108,7 +120,7 @@ Panel {
   onOpenedChanged: {
     controller.panelOpen = opened
     if (opened) {
-      flexSection.resetCursor()
+      root.showView("today")
       controller.refreshAll()
     }
   }
@@ -143,6 +155,37 @@ Panel {
     }
   }
 
+  Component {
+    id: todayViewComponent
+
+    TodayView {
+      controller: root.controllerForViews
+      budgetRows: root.budgetRows
+      gateRows: root.gateRows
+      earnedRows: root.earnedRows
+      dayWindow: root.dayWindow
+      browserAttention: root.browserAttention
+      foreground: root.foreground
+      dim: root.dim
+      fontFamily: root.fontFamily
+      onRedeem: function(target) { root.controllerForViews.redeemFlex(target) }
+    }
+  }
+
+  Component {
+    id: historyViewComponent
+
+    HistoryView {
+      controller: root.controllerForViews
+      weekRows: root.weekRows
+      categories: root.historyCategories
+      weekMaximum: root.weekMaximum
+      foreground: root.foreground
+      dim: root.dim
+      fontFamily: root.fontFamily
+    }
+  }
+
   KeyboardPanel {
     id: panel
     anchorItem: button
@@ -156,17 +199,25 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
-      onCloseRequested: root.close()
+      onCloseRequested: {
+        if (root.currentView === "history") root.showView("today")
+        else root.close()
+      }
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onMoveRequested: function(_dx, dy) {
-        if (flexSection.visible && dy !== 0) {
-          flexSection.moveCursor(dy)
-          root.ensureVisible(flexSection.cursorItem())
+        if (root.currentView === "today" && viewLoader.item && viewLoader.item.flexVisible && dy !== 0) {
+          viewLoader.item.moveCursor(dy)
+          root.ensureVisible(viewLoader.item.cursorItem())
         }
       }
-      onActivateRequested: if (flexSection.visible && flexSection.cursorActive) flexSection.activateCursor()
+      onActivateRequested: {
+        if (root.currentView === "today" && viewLoader.item && viewLoader.item.flexCursorActive)
+          viewLoader.item.activateCursor()
+      }
       onTextKey: function(text) {
         if (text === "r" || text === "R") controller.refreshAll()
+        else if (text === "h" || text === "H") root.showView("history")
+        else if (text === "t" || text === "T") root.showView("today")
       }
 
       ScrollView {
@@ -190,296 +241,39 @@ Panel {
             fontFamily: root.fontFamily
           }
 
-          PolicyProgressRow {
-            visible: controller.statusKnown && controller.statusCompatibility === ""
-            label: qsTr("Usable day")
-            value: qsTr("%1–%2")
-              .arg(root.clockLabel(controller.status.curfew.end))
-              .arg(root.clockLabel(controller.status.curfew.start))
-            detail: controller.status.curfew.active
-              ? qsTr("Curfew is active")
-              : qsTr("%1 until curfew").arg(Model.formatCountdown(root.dayWindow.remaining))
-            ratio: root.dayWindow.ratio
-            complete: controller.status.curfew.active && root.dayWindow.ratio >= 1
-            active: !controller.status.curfew.active
-            foreground: root.foreground
-            dim: root.dim
-            fontFamily: root.fontFamily
-          }
-
-          Text {
-            visible: controller.statusError !== "" && controller.statusCompatibility === ""
-            width: parent.width
-            text: controller.statusError
-            textFormat: Text.PlainText
-            color: Color.urgent
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
-            wrapMode: Text.WordWrap
-          }
-
-          Text {
-            visible: controller.available && root.browserAttention
-            width: parent.width
-            text: qsTr("Browser protection needs attention")
-            textFormat: Text.PlainText
-            color: Color.urgent
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.body
-            font.bold: true
-            wrapMode: Text.WordWrap
-          }
-
-          Text {
-            visible: controller.available && controller.status.apps.groups.length > 0
-              && !controller.status.apps.healthy
-            width: parent.width
-            text: qsTr("Application tracking needs attention")
-            textFormat: Text.PlainText
-            color: Color.urgent
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.body
-            font.bold: true
-            wrapMode: Text.WordWrap
-          }
-
-          PanelSeparator { foreground: root.foreground }
-
           Item {
             width: parent.width
-            implicitHeight: Math.max(todayHeader.implicitHeight, todayTotal.implicitHeight)
+            implicitHeight: viewSelector.implicitHeight
 
-            PanelSectionHeader {
-              id: todayHeader
-              anchors.left: parent.left
-              anchors.right: todayTotal.left
-              anchors.rightMargin: Style.space(8)
-              anchors.verticalCenter: parent.verticalCenter
-              text: qsTr("TODAY")
-              elide: Text.ElideRight
+            ButtonGroup {
+              id: viewSelector
+              anchors.horizontalCenter: parent.horizontalCenter
+              options: [
+                { value: "today", label: qsTr("Today") },
+                { value: "history", label: qsTr("History") }
+              ]
+              value: root.currentView
+              focusable: false
               foreground: root.foreground
+              background: "transparent"
+              accent: Color.accent
               fontFamily: root.fontFamily
-            }
-
-            Text {
-              id: todayTotal
-              anchors.right: parent.right
-              anchors.verticalCenter: parent.verticalCenter
-              text: Model.formatDuration(Model.totalToday(root.budgetRows)) + qsTr(" tracked")
-              textFormat: Text.PlainText
-              color: root.dim
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
+              onChanged: function(value) { root.showView(value) }
             }
           }
 
-          Repeater {
-            model: root.budgetRows
-
-            BudgetRow {
-              width: content.width
-              foreground: root.foreground
-              dim: root.dim
-              fontFamily: root.fontFamily
-            }
-          }
-
-          PanelSeparator {
-            visible: root.gateRows.length > 0
-            foreground: root.foreground
-          }
-
-          PanelSectionHeader {
-            visible: root.gateRows.length > 0
-            text: qsTr("PREREQUISITES")
-            foreground: root.foreground
-            fontFamily: root.fontFamily
-          }
-
-          Repeater {
-            model: root.gateRows
-
-            PolicyProgressRow {
-              required property var modelData
-              width: content.width
-              label: modelData.source
-              value: !modelData.synchronized ? qsTr("Syncing")
-                : modelData.satisfied ? qsTr("Ready")
-                : modelData.kind === "count"
-                  ? qsTr("%1 left").arg(modelData.remaining)
-                  : qsTr("%1 left").arg(Model.formatDuration(modelData.remaining))
-              detail: !modelData.synchronized
-                ? qsTr("Checking today's activity")
-                : modelData.satisfied
-                  ? qsTr("%1 unlocked").arg(modelData.targets)
-                  : qsTr("Unlocks %1").arg(modelData.targets)
-              ratio: modelData.ratio
-              complete: modelData.satisfied
-              foreground: root.foreground
-              dim: root.dim
-              fontFamily: root.fontFamily
-            }
-          }
-
-          PanelSeparator {
-            visible: root.earnedRows.length > 0
-            foreground: root.foreground
-          }
-
-          PanelSectionHeader {
-            visible: root.earnedRows.length > 0
-            text: qsTr("EARNED TIME")
-            foreground: root.foreground
-            fontFamily: root.fontFamily
-          }
-
-          Repeater {
-            model: root.earnedRows
-
-            PolicyProgressRow {
-              required property var modelData
-              width: content.width
-              label: qsTr("%1 → %2").arg(modelData.source).arg(modelData.target)
-              value: qsTr("%1 / %2").arg(Model.formatDuration(modelData.bank)).arg(Model.formatDuration(modelData.cap))
-              detail: modelData.suppressed ? qsTr("Paused while the target is active")
-                : modelData.earning ? qsTr("Earning now") : qsTr("Reward bank")
-              ratio: modelData.ratio
-              active: modelData.earning
-              foreground: root.foreground
-              dim: root.dim
-              fontFamily: root.fontFamily
-            }
-          }
-
-          PanelSeparator {
-            visible: flexSection.visible
-            foreground: root.foreground
-          }
-
-          FlexSection {
-            id: flexSection
+          Loader {
+            id: viewLoader
             width: content.width
-            status: controller.status
-            busy: controller.flexBusy
-            message: controller.flexMessage
-            error: controller.flexError
-            foreground: root.foreground
-            dim: root.dim
-            fontFamily: root.fontFamily
-            onRedeem: function(target) { controller.redeemFlex(target) }
-          }
-
-          PanelSeparator { foreground: root.foreground }
-
-          Item {
-            width: parent.width
-            implicitHeight: Math.max(historyHeader.implicitHeight, historyTotal.implicitHeight)
-
-            PanelSectionHeader {
-              id: historyHeader
-              anchors.left: parent.left
-              anchors.right: historyTotal.left
-              anchors.rightMargin: Style.space(8)
-              anchors.verticalCenter: parent.verticalCenter
-              text: qsTr("LAST 7 DAYS")
-              elide: Text.ElideRight
-              foreground: root.foreground
-              fontFamily: root.fontFamily
-            }
-
-            Text {
-              id: historyTotal
-              anchors.right: parent.right
-              anchors.verticalCenter: parent.verticalCenter
-              text: controller.reportKnown ? Model.formatDuration(Model.reportTotal(controller.report)) : qsTr("Loading…")
-              textFormat: Text.PlainText
-              color: root.dim
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.caption
-            }
-          }
-
-          WeekChart {
-            visible: root.weekRows.length > 0
-            width: parent.width
-            rows: root.weekRows
-            maximum: root.weekMaximum
-            currentDate: controller.report.end_date
-            foreground: root.foreground
-            dim: root.dim
-            fontFamily: root.fontFamily
-          }
-
-          Text {
-            visible: controller.reportKnown && controller.reportError === ""
-            width: parent.width
-            text: Model.recordedDaysLabel(controller.report.recorded_days)
-              + qsTr(" · unrecorded days are unknown")
-            textFormat: Text.PlainText
-            color: root.dim
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-          }
-
-          PanelSectionHeader {
-            visible: controller.reportKnown && root.historyCategories.length > 0
-            text: qsTr("BREAKDOWN")
-            foreground: root.foreground
-            fontFamily: root.fontFamily
-          }
-
-          Repeater {
-            model: controller.reportKnown ? root.historyCategories : []
-
-            Item {
-              id: historyRow
-
-              required property var modelData
-              width: content.width
-              implicitHeight: Math.max(historyCategoryLabel.implicitHeight, historyCategoryTime.implicitHeight)
-
-              Text {
-                id: historyCategoryLabel
-                anchors.left: parent.left
-                anchors.right: historyCategoryTime.left
-                anchors.rightMargin: Style.space(8)
-                text: historyRow.modelData.label
-                textFormat: Text.PlainText
-                color: root.foreground
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.body
-                elide: Text.ElideRight
-              }
-
-              Text {
-                id: historyCategoryTime
-                anchors.right: parent.right
-                text: Model.formatDuration(historyRow.modelData.seconds)
-                textFormat: Text.PlainText
-                color: root.dim
-                font.family: root.fontFamily
-                font.pixelSize: Style.font.body
-              }
-            }
-          }
-
-          Text {
-            visible: controller.reportError !== ""
-            width: parent.width
-            text: controller.reportError
-            textFormat: Text.PlainText
-            color: Color.urgent
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
+            implicitHeight: item ? item.implicitHeight : 0
+            sourceComponent: root.currentView === "history" ? historyViewComponent : todayViewComponent
           }
 
           Text {
             width: parent.width
-            text: qsTr("Press R to refresh · right-click the bar icon anytime")
+            text: root.currentView === "history"
+              ? qsTr("Press T for Today · R to refresh")
+              : qsTr("Press H for History · R to refresh")
             textFormat: Text.PlainText
             color: root.dim
             font.family: root.fontFamily

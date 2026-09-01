@@ -151,7 +151,8 @@ assert.equal(adaptiveBudgets[0].meterLimit, 3600)
 assert.equal(adaptiveBudgets[0].meterRatio, 1 / 3)
 assert.equal(adaptiveBudgets[0].meterScope, "rolling")
 assert.equal(adaptiveBudgets[0].blockedBy, "prerequisite-gate")
-assert.equal(context.budgetDetail(adaptiveBudgets[0]), "10m of Journaling needed")
+assert.equal(adaptiveBudgets[0].prerequisiteLocked, true)
+assert.equal(context.budgetDetail(adaptiveBudgets[0]), "Locked · 10m of Journaling needed")
 assert.equal(adaptiveBudgets[1].label, "Other Games")
 assert.equal(context.totalToday(adaptiveBudgets), 1500)
 assert.equal(context.budgetDetail({
@@ -173,6 +174,27 @@ assert.equal(context.budgetRows(context.parseStatus(JSON.stringify({
     pace: { used_seconds: 905, limit_seconds: 900, window_seconds: 3600, remaining_seconds: 0 }
   }
 })).data)[0].meterRatio, 1)
+
+const dailyBindingBudget = context.budgetRows(context.parseStatus(JSON.stringify({
+  version: 1,
+  steam: {
+    daily_limit_seconds: 1800,
+    used_seconds: 1500,
+    remaining_seconds: 300,
+    pace: {
+      used_seconds: 300,
+      limit_seconds: 900,
+      window_seconds: 3600,
+      remaining_seconds: 600
+    }
+  }
+})).data)[0]
+assert.equal(dailyBindingBudget.dailyRemaining, 300)
+assert.equal(dailyBindingBudget.meterUsed, 1500)
+assert.equal(dailyBindingBudget.meterLimit, 1800)
+assert.equal(dailyBindingBudget.meterRatio, 5 / 6)
+assert.equal(dailyBindingBudget.meterScope, "daily")
+assert.equal(context.budgetDetail(dailyBindingBudget), "5m remaining today")
 assert.equal(context.gateRows(adaptiveStatus)[0].ratio, 0.5)
 
 const journalStatus = context.parseStatus(JSON.stringify({
@@ -209,7 +231,7 @@ assert.equal(journalGates[0].kind, "count")
 assert.equal(journalGates[0].remaining, 1)
 assert.equal(journalGates[1].source, "Journal")
 assert.equal(journalGates[1].ratio, 0.7)
-assert.equal(context.budgetDetail(context.budgetRows(journalStatus)[0]), "3m of Journal needed")
+assert.equal(context.budgetDetail(context.budgetRows(journalStatus)[0]), "Locked · 3m of Journal needed")
 
 const syncingStatus = context.parseStatus(JSON.stringify({
   version: 1,
@@ -233,7 +255,9 @@ const syncingStatus = context.parseStatus(JSON.stringify({
   }]
 })).data
 assert.equal(context.gateRows(syncingStatus)[0].synchronized, false)
-assert.equal(context.budgetDetail(context.budgetRows(syncingStatus)[0]), "Syncing Journal")
+assert.equal(context.budgetRows(syncingStatus)[0].prerequisiteChecking, true)
+assert.equal(context.budgetRows(syncingStatus)[0].prerequisiteLocked, false)
+assert.equal(context.budgetDetail(context.budgetRows(syncingStatus)[0]), "Checking Journal activity")
 
 assert.equal(context.earnedRows(adaptiveStatus)[0].bank, 300)
 assert.equal(context.flexTargets(adaptiveStatus)[1].label, "Other Games")

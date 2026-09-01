@@ -169,10 +169,17 @@ function budgetRow(id, label, value, status) {
     number(value.remaining_seconds, dailyRemaining))) : 0
   var blockedBy = value.blocked_by || ""
   var gate = gateForTarget(status, id)
+  var prerequisiteChecking = gate !== null && gate.synchronized === false
+  var prerequisiteLocked = gate !== null && gate.synchronized !== false && gate.satisfied !== true
   var schedule = value.schedule || null
   var pace = value.pace || null
-  var meterUsed = pace ? Math.max(0, number(pace.used_seconds, 0)) : used
-  var meterLimit = pace ? Math.max(0, number(pace.limit_seconds, 0)) : limit
+  var paceUsed = pace ? Math.max(0, number(pace.used_seconds, 0)) : 0
+  var paceLimit = pace ? Math.max(0, number(pace.limit_seconds, 0)) : 0
+  var paceRemaining = pace ? Math.max(0, number(pace.remaining_seconds,
+    Math.max(0, paceLimit - paceUsed))) : 0
+  var dailyIsBinding = pace && dailyRemaining < paceRemaining
+  var meterUsed = pace && !dailyIsBinding ? paceUsed : used
+  var meterLimit = pace && !dailyIsBinding ? paceLimit : limit
   return {
     id: id,
     label: label,
@@ -180,16 +187,19 @@ function budgetRow(id, label, value, status) {
     used: used,
     limit: limit,
     remaining: remaining,
+    dailyRemaining: dailyRemaining,
     ratio: limit > 0 ? clamp(used / limit, 0, 1) : 0,
     meterUsed: meterUsed,
     meterLimit: meterLimit,
     meterRatio: meterLimit > 0 ? clamp(meterUsed / meterLimit, 0, 1) : 0,
-    meterScope: pace ? "rolling" : "daily",
+    meterScope: pace && !dailyIsBinding ? "rolling" : "daily",
     active: value.active === true,
-    blocked: blockedBy !== "" || value.action_due === true,
+    blocked: blockedBy !== "" || prerequisiteLocked || value.action_due === true,
     reached: blockedBy === "daily-limit" || value.limit_reached === true,
     blockedBy: blockedBy,
     gate: gate,
+    prerequisiteChecking: prerequisiteChecking,
+    prerequisiteLocked: prerequisiteLocked,
     schedule: schedule,
     pace: pace,
     flexRemaining: Math.max(0, number(value.flex_remaining_seconds, 0)),
@@ -220,6 +230,14 @@ function budgetRows(status) {
 function budgetDetail(row) {
   row = row || {}
   if (row.restricted === false) return "Observed activity"
+  if (row.prerequisiteChecking) return "Checking " + (row.gate || {}).source + " activity"
+  if (row.prerequisiteLocked) {
+    var prerequisite = row.gate || {}
+    if (prerequisite.kind === "count")
+      return "Locked · " + String(prerequisite.remaining) + " more " + prerequisite.source
+        + (prerequisite.remaining === 1 ? " entry needed" : " entries needed")
+    return "Locked · " + formatDuration(prerequisite.remaining) + " of " + prerequisite.source + " needed"
+  }
   if (row.blockedBy === "schedule") return "Outside schedule"
   if (row.blockedBy === "prerequisite-gate") {
     var gate = row.gate || {}
@@ -231,6 +249,8 @@ function budgetDetail(row) {
   if (row.blockedBy === "pace-limit") return "Rolling limit reached"
   if (row.blockedBy === "daily-limit") return "Blocked for today"
   if (row.pace) {
+    if (row.meterScope === "daily")
+      return formatDuration(row.dailyRemaining) + " remaining today"
     var paceRemaining = Math.max(0, number(row.pace.remaining_seconds, 0))
     return paceRemaining > 0
       ? formatDuration(paceRemaining) + " rolling remaining"

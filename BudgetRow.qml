@@ -12,9 +12,15 @@ Column {
   readonly property string metaText: {
     const parts = []
     if (modelData.pace) {
-      parts.push(qsTr("%1 / %2 today")
-        .arg(Model.formatDuration(modelData.used))
-        .arg(Model.formatDuration(modelData.limit)))
+      if (modelData.meterScope === "rolling") {
+        parts.push(qsTr("%1 / %2 today")
+          .arg(Model.formatDuration(modelData.used))
+          .arg(Model.formatDuration(modelData.limit)))
+      } else {
+        parts.push(qsTr("%1 / %2 rolling")
+          .arg(Model.formatDuration(modelData.pace.used_seconds))
+          .arg(Model.formatDuration(modelData.pace.limit_seconds)))
+      }
       parts.push(qsTr("%1 window").arg(Model.formatDuration(modelData.pace.window_seconds)))
     }
     if (modelData.earnedBank > 0)
@@ -23,6 +29,9 @@ Column {
       parts.push(qsTr("%1 flex").arg(Model.formatDuration(modelData.flexRemaining)))
     return parts.join(qsTr(" · "))
   }
+  readonly property string stateSuffix: modelData.prerequisiteChecking ? qsTr(" · checking")
+    : modelData.prerequisiteLocked ? qsTr(" · locked")
+    : modelData.active ? qsTr(" · active") : ""
 
   width: parent ? parent.width : implicitWidth
   spacing: Style.space(5)
@@ -59,7 +68,7 @@ Column {
       anchors.left: parent.left
       anchors.right: budgetTime.left
       anchors.rightMargin: Style.space(8)
-      text: root.modelData.label + (root.modelData.active ? qsTr(" · active") : "")
+      text: root.modelData.label + root.stateSuffix
       textFormat: Text.PlainText
       color: root.modelData.blocked ? Color.urgent : root.foreground
       font.family: root.fontFamily

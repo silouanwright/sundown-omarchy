@@ -48,6 +48,42 @@ ShellRoot {
     chart.destroy()
   }
 
+  function checkPanelViews() {
+    const today = todayViewComponent.createObject(root)
+    if (!today || today.implicitHeight <= 0)
+      return fail("could not create the Today panel view")
+    today.destroy()
+
+    const history = historyViewComponent.createObject(root)
+    if (!history || history.implicitHeight <= 0)
+      return fail("could not create the History panel view")
+    history.destroy()
+  }
+
+  QtObject {
+    id: fakeController
+    property bool statusKnown: true
+    property string statusCompatibility: ""
+    property bool available: true
+    property string statusError: ""
+    property bool flexBusy: false
+    property string flexMessage: ""
+    property string flexError: ""
+    property bool reportKnown: true
+    property string reportError: ""
+    property var status: ({
+      curfew: { active: false, start: "19:00", end: "06:00" },
+      apps: { healthy: true, groups: [] },
+      flex: { enabled: false, eligible: [], redemptions: [] }
+    })
+    property var report: ({
+      end_date: "2026-09-01",
+      recorded_days: 1,
+      days: [],
+      totals: { steam_seconds: 0, web_seconds: {}, app_seconds: {} }
+    })
+  }
+
   Component {
     id: controllerComponent
     Plugin.SundownController {
@@ -87,6 +123,7 @@ ShellRoot {
         meterUsed: 905,
         meterLimit: 900,
         meterRatio: 1,
+        meterScope: "rolling",
         active: false,
         blocked: true,
         blockedBy: "pace-limit",
@@ -124,6 +161,28 @@ ShellRoot {
     }
   }
 
+  Component {
+    id: todayViewComponent
+    Plugin.TodayView {
+      width: 380
+      controller: fakeController
+      dayWindow: ({ ratio: 0.5, remaining: 3600 })
+    }
+  }
+
+  Component {
+    id: historyViewComponent
+    Plugin.HistoryView {
+      width: 380
+      controller: fakeController
+      weekRows: [
+        { date: "2026-09-01", label: "T", seconds: 600, recorded: true }
+      ]
+      categories: [{ label: "Gaming", seconds: 600 }]
+      weekMaximum: 600
+    }
+  }
+
   Timer {
     interval: 25
     running: true
@@ -138,6 +197,7 @@ ShellRoot {
         root.checkFlexSection()
         root.checkRollingBudgetRow()
         root.checkWeekChart()
+        root.checkPanelViews()
         console.log("QML checks passed")
         Qt.quit()
       } else if (root.attempts >= 200) {
