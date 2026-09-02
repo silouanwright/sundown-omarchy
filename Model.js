@@ -146,6 +146,13 @@ function evidenceSourceLabel(source, fallbackName) {
   return known[String(source || "")] || titleForRule(fallbackName || "Prerequisite")
 }
 
+function evidenceProvider(source) {
+  var value = String(source || "").toLowerCase()
+  if (value.indexOf("/services/evercount/") === 0) return "evercount"
+  if (value.indexOf("/apps/voice-journal/") === 0) return "journal"
+  return ""
+}
+
 function gateForTarget(status, target) {
   var gates = gateRows(status)
   for (var i = 0; i < gates.length; i++) {
@@ -292,6 +299,7 @@ function gateRows(status) {
       kind: "count",
       name: String(gate.name || "Prerequisite"),
       source: evidenceSourceLabel(gate.source, gate.name),
+      provider: evidenceProvider(gate.source),
       targetIds: targetIds,
       targets: targetIds.map(function(target) { return targetLabel(target, status) }).join(", "),
       used: used,
@@ -311,6 +319,7 @@ function gateRows(status) {
       kind: "duration",
       name: String(gate.name || "Prerequisite"),
       source: evidenceSourceLabel(gate.source, gate.name),
+      provider: evidenceProvider(gate.source),
       targetIds: targetIds,
       targets: targetIds.map(function(target) { return targetLabel(target, status) }).join(", "),
       used: used,

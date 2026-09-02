@@ -172,6 +172,7 @@ Panel {
       dim: root.dim
       fontFamily: root.fontFamily
       onRedeem: function(target) { root.controllerForViews.redeemFlex(target) }
+      onSyncEvercount: root.controllerForViews.syncEvercount()
     }
   }
 
@@ -221,6 +222,10 @@ Panel {
         if (text === "r" || text === "R") controller.refreshAll()
         else if (text === "h" || text === "H") root.showView("history")
         else if (text === "t" || text === "T") root.showView("today")
+        else if ((text === "s" || text === "S")
+            && root.currentView === "today" && viewLoader.item
+            && viewLoader.item.evercountSyncVisible)
+          viewLoader.item.requestEvercountSync()
       }
 
       ScrollView {
@@ -277,7 +282,9 @@ Panel {
             width: parent.width
             text: root.currentView === "history"
               ? qsTr("Press T for Today · R to refresh")
-              : qsTr("Press H for History · R to refresh")
+              : (viewLoader.item && viewLoader.item.evercountSyncVisible
+                ? qsTr("Press S to sync Evercount · H for History · R to refresh")
+                : qsTr("Press H for History · R to refresh"))
             textFormat: Text.PlainText
             color: root.dim
             font.family: root.fontFamily

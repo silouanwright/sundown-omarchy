@@ -64,6 +64,25 @@ ShellRoot {
     if (today.gateValue(durationGate) !== "10m / 10m"
         || today.gateDetail(durationGate) !== "Completed · Unlocked: Gaming, Social")
       return fail("duration prerequisite progress is not explicit")
+    today.gateRows = [{
+      provider: "evercount",
+      source: "Morning Prayer",
+      kind: "duration",
+      used: 600,
+      required: 1800,
+      remaining: 1200,
+      ratio: 1 / 3,
+      synchronized: true,
+      satisfied: false,
+      targets: "Gaming"
+    }]
+    if (!today.evercountSyncVisible)
+      return fail("Evercount prerequisite did not expose manual sync")
+    let syncRequests = 0
+    today.syncEvercount.connect(function() { syncRequests++ })
+    today.requestEvercountSync()
+    if (syncRequests !== 1)
+      return fail("manual Evercount sync did not emit exactly once")
     const countGate = {
       synchronized: true,
       kind: "count",
@@ -93,6 +112,9 @@ ShellRoot {
     property bool flexBusy: false
     property string flexMessage: ""
     property string flexError: ""
+    property bool evercountSyncBusy: false
+    property string evercountSyncMessage: ""
+    property string evercountSyncError: ""
     property bool reportKnown: true
     property string reportError: ""
     property var status: ({
@@ -113,6 +135,7 @@ ShellRoot {
     Plugin.SundownController {
       panelOpen: true
       sundownCommand: "/definitely-missing/sundown"
+      evercountCommand: "/definitely-missing/sundown-adapter-evercount"
     }
   }
 
@@ -217,11 +240,14 @@ ShellRoot {
     repeat: true
     onTriggered: {
       root.attempts++
-      if (root.controller.statusKnown && root.controller.reportKnown) {
+      if (root.controller.statusKnown && root.controller.reportKnown
+          && !root.controller.evercountSyncBusy) {
         if (root.controller.available
             || root.controller.statusError !== qsTr("Sundown is not available")
             || root.controller.reportError !== qsTr("Could not load Screen Time history"))
           return root.fail("failed commands did not settle into their error states")
+        if (root.controller.evercountSyncError !== qsTr("Could not start the Evercount adapter"))
+          return root.fail("failed Evercount sync did not settle into its error state")
         root.checkFlexSection()
         root.checkRollingBudgetRow()
         root.checkWeekChart()
@@ -237,5 +263,6 @@ ShellRoot {
   Component.onCompleted: {
     controller = controllerComponent.createObject(root)
     if (!controller) fail("could not create SundownController")
+    controller.syncEvercount()
   }
 }

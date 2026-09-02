@@ -7,6 +7,7 @@ Item {
 
   property bool panelOpen: false
   property string sundownCommand: "/usr/bin/sundown"
+  property string evercountCommand: "/usr/bin/sundown-adapter-evercount"
   property bool statusKnown: false
   property bool reportKnown: false
   property bool available: false
@@ -20,12 +21,17 @@ Item {
   property bool flexBusy: false
   property string flexMessage: ""
   property string flexError: ""
+  property bool evercountSyncBusy: false
+  property string evercountSyncMessage: ""
+  property string evercountSyncError: ""
   property string _statusOutput: ""
   property string _statusStderr: ""
   property string _reportOutput: ""
   property string _reportStderr: ""
   property string _flexOutput: ""
   property string _flexStderr: ""
+  property string _evercountSyncOutput: ""
+  property string _evercountSyncStderr: ""
   property bool _statusCompleted: false
   property bool _reportCompleted: false
 
@@ -63,6 +69,16 @@ Item {
     _flexStderr = ""
     flexProcess.command = [root.sundownCommand, "flex", "redeem", String(target)]
     flexProcess.running = true
+  }
+
+  function syncEvercount() {
+    if (evercountSyncProcess.running) return
+    evercountSyncBusy = true
+    evercountSyncMessage = ""
+    evercountSyncError = ""
+    _evercountSyncOutput = ""
+    _evercountSyncStderr = ""
+    evercountSyncProcess.running = true
   }
 
   function compatibilityMessage(issue, fallback) {
@@ -140,6 +156,35 @@ Item {
         root.refreshAll()
       } else {
         root.flexError = root._flexStderr || qsTr("Could not redeem the flex pass")
+      }
+    }
+  }
+
+  Process {
+    id: evercountSyncProcess
+    command: [root.evercountCommand, "sync"]
+    onRunningChanged: {
+      if (!running && root.evercountSyncBusy) {
+        root.evercountSyncBusy = false
+        root.evercountSyncError = qsTr("Could not start the Evercount adapter")
+      }
+    }
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root._evercountSyncOutput = String(text || "").trim()
+    }
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root._evercountSyncStderr = String(text || "").trim()
+    }
+    onExited: function(exitCode) {
+      root.evercountSyncBusy = false
+      if (exitCode === 0) {
+        root.evercountSyncMessage = qsTr("Evercount synced")
+        root.refreshAll()
+      } else {
+        root.evercountSyncError = root._evercountSyncStderr
+          || qsTr("Could not sync Evercount")
       }
     }
   }

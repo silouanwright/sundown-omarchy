@@ -28,6 +28,14 @@ sundown flex redeem TARGET
 The daemon validates the caller, target, remaining passes, schedule, curfew,
 morning focus, and prerequisite gate before recording any redemption.
 
+When an Evercount-backed prerequisite is configured, the Today view offers an
+explicit sync action. It runs the separately installed read-only adapter and
+refreshes panel status after a successful reconciliation:
+
+```bash
+sundown-adapter-evercount sync
+```
+
 ## Install
 
 Install the Sundown core first. Then add this repository through Omarchy:
@@ -67,8 +75,10 @@ The plugin requires no third-party QML packages.
 ## Privacy and permissions
 
 The plugin runs `/usr/bin/sundown status --json`, `/usr/bin/sundown report week
---json`, and—only after an explicit panel action—`/usr/bin/sundown flex redeem
-TARGET`. It has no installer, privileged actions, network access, or persistent
+--json`, and—only after explicit panel actions—`/usr/bin/sundown flex redeem
+TARGET` or `/usr/bin/sundown-adapter-evercount sync`. The adapter owns its
+read-only network request and credential; the QML process never reads or passes
+the token. The plugin has no installer, privileged actions, or persistent
 state. Usage policy, counters, browser integration, and enforcement remain in
 the separately installed Sundown core.
 

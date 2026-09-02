@@ -258,6 +258,22 @@ assert.equal(context.budgetRows(syncingStatus)[0].prerequisiteChecking, true)
 assert.equal(context.budgetRows(syncingStatus)[0].prerequisiteLocked, false)
 assert.equal(context.budgetDetail(context.budgetRows(syncingStatus)[0]), "Checking Journal activity")
 
+const evercountStatus = context.parseStatus(JSON.stringify({
+  version: 1,
+  duration_gates: [{
+    name: "morning-prayer",
+    source: "/services/evercount/morning-prayer-minutes",
+    targets: ["steam"],
+    recorded_seconds: 600,
+    required_seconds: 1800,
+    remaining_seconds: 1200,
+    synchronized: true,
+    satisfied: false
+  }]
+})).data
+assert.equal(context.gateRows(evercountStatus)[0].provider, "evercount")
+assert.equal(context.gateRows(journalStatus)[0].provider, "journal")
+
 assert.equal(context.earnedRows(adaptiveStatus)[0].bank, 300)
 assert.equal(context.flexTargets(adaptiveStatus)[1].label, "Other Games")
 assert.deepEqual(context.flexAuditRows(adaptiveStatus).map(row => row.label), ["Other Games", "Steam"])

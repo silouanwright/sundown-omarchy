@@ -18,8 +18,12 @@ Column {
   property string fontFamily: Style.font.family
   readonly property bool flexVisible: flexSection.visible
   readonly property bool flexCursorActive: flexSection.cursorActive
+  readonly property bool evercountSyncVisible: root.gateRows.some(function(gate) {
+    return gate.provider === "evercount"
+  })
 
   signal redeem(string target)
+  signal syncEvercount()
 
   width: parent ? parent.width : implicitWidth
   spacing: Style.space(14)
@@ -30,6 +34,10 @@ Column {
     if (flexSection.visible && flexSection.cursorActive) flexSection.activateCursor()
   }
   function cursorItem() { return flexSection.visible ? flexSection.cursorItem() : null }
+  function requestEvercountSync() {
+    if (root.evercountSyncVisible && !root.controller.evercountSyncBusy)
+      root.syncEvercount()
+  }
 
   function gateValue(gate) {
     if (!gate.synchronized) return qsTr("Syncing")
@@ -159,6 +167,43 @@ Column {
       dim: root.dim
       fontFamily: root.fontFamily
     }
+  }
+
+  Button {
+    visible: root.evercountSyncVisible
+    width: root.width
+    text: root.controller.evercountSyncBusy
+      ? qsTr("Syncing Evercount…")
+      : (root.controller.evercountSyncError !== ""
+        ? qsTr("Retry Evercount sync")
+        : qsTr("Sync Evercount"))
+    iconText: "󰑐"
+    iconSpinning: root.controller.evercountSyncBusy
+    enabled: !root.controller.evercountSyncBusy
+    focusable: true
+    bordered: true
+    foreground: root.foreground
+    accent: Color.accent
+    fontFamily: root.fontFamily
+    Accessible.role: Accessible.Button
+    Accessible.name: text
+    onClicked: root.requestEvercountSync()
+  }
+
+  Text {
+    visible: root.evercountSyncVisible
+      && (root.controller.evercountSyncError !== ""
+        || root.controller.evercountSyncMessage !== "")
+    width: parent.width
+    text: root.controller.evercountSyncError !== ""
+      ? root.controller.evercountSyncError
+      : root.controller.evercountSyncMessage
+    textFormat: Text.PlainText
+    color: root.controller.evercountSyncError !== "" ? Color.urgent : root.dim
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.caption
+    horizontalAlignment: Text.AlignHCenter
+    wrapMode: Text.WordWrap
   }
 
   PanelSeparator {
