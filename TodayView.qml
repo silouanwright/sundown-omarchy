@@ -145,11 +145,62 @@ Column {
     foreground: root.foreground
   }
 
-  PanelSectionHeader {
+  Item {
     visible: root.gateRows.length > 0
-    text: qsTr("PREREQUISITES")
-    foreground: root.foreground
-    fontFamily: root.fontFamily
+    width: parent.width
+    implicitHeight: Math.max(prerequisitesHeader.implicitHeight,
+      evercountSyncButton.visible ? evercountSyncButton.implicitHeight : 0)
+
+    PanelSectionHeader {
+      id: prerequisitesHeader
+      anchors.left: parent.left
+      anchors.right: evercountSyncButton.visible ? evercountSyncButton.left : parent.right
+      anchors.rightMargin: evercountSyncButton.visible ? Style.space(8) : 0
+      anchors.verticalCenter: parent.verticalCenter
+      text: qsTr("PREREQUISITES")
+      elide: Text.ElideRight
+      foreground: root.foreground
+      fontFamily: root.fontFamily
+    }
+
+    Button {
+      id: evercountSyncButton
+      visible: root.evercountSyncVisible
+      anchors.right: parent.right
+      anchors.verticalCenter: parent.verticalCenter
+      text: root.controller.evercountSyncBusy
+        ? qsTr("Syncing…")
+        : (root.controller.evercountSyncError !== ""
+          ? qsTr("Retry sync")
+          : qsTr("Sync Evercount"))
+      iconText: "󰑐"
+      iconSpinning: root.controller.evercountSyncBusy
+      enabled: !root.controller.evercountSyncBusy
+      focusable: true
+      bordered: true
+      foreground: root.foreground
+      accent: Color.accent
+      fontFamily: root.fontFamily
+      Accessible.role: Accessible.Button
+      Accessible.name: text
+      onClicked: root.requestEvercountSync()
+    }
+  }
+
+  Text {
+    visible: root.evercountSyncVisible
+      && (root.controller.evercountSyncError !== ""
+        || root.controller.evercountSyncMessage !== "")
+    width: root.width
+    text: root.controller.evercountSyncError !== ""
+      ? root.controller.evercountSyncError
+      : root.controller.evercountSyncMessage
+    textFormat: Text.PlainText
+    color: root.controller.evercountSyncError !== "" ? Color.urgent : root.dim
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.caption
+    horizontalAlignment: Text.AlignHCenter
+    wrapMode: Text.WordWrap
   }
 
   Repeater {
@@ -167,43 +218,6 @@ Column {
       dim: root.dim
       fontFamily: root.fontFamily
     }
-  }
-
-  Button {
-    visible: root.evercountSyncVisible
-    width: root.width
-    text: root.controller.evercountSyncBusy
-      ? qsTr("Syncing Evercount…")
-      : (root.controller.evercountSyncError !== ""
-        ? qsTr("Retry Evercount sync")
-        : qsTr("Sync Evercount"))
-    iconText: "󰑐"
-    iconSpinning: root.controller.evercountSyncBusy
-    enabled: !root.controller.evercountSyncBusy
-    focusable: true
-    bordered: true
-    foreground: root.foreground
-    accent: Color.accent
-    fontFamily: root.fontFamily
-    Accessible.role: Accessible.Button
-    Accessible.name: text
-    onClicked: root.requestEvercountSync()
-  }
-
-  Text {
-    visible: root.evercountSyncVisible
-      && (root.controller.evercountSyncError !== ""
-        || root.controller.evercountSyncMessage !== "")
-    width: parent.width
-    text: root.controller.evercountSyncError !== ""
-      ? root.controller.evercountSyncError
-      : root.controller.evercountSyncMessage
-    textFormat: Text.PlainText
-    color: root.controller.evercountSyncError !== "" ? Color.urgent : root.dim
-    font.family: root.fontFamily
-    font.pixelSize: Style.font.caption
-    horizontalAlignment: Text.AlignHCenter
-    wrapMode: Text.WordWrap
   }
 
   PanelSeparator {
