@@ -11,6 +11,7 @@ Column {
   required property var controller
   property var budgetRows: []
   property var gateRows: []
+  property var providerRows: []
   property var earnedRows: []
   property bool browserAttention: false
   property color foreground: Color.popups.text
@@ -18,8 +19,8 @@ Column {
   property string fontFamily: Style.font.family
   readonly property bool flexVisible: flexSection.visible
   readonly property bool flexCursorActive: flexSection.cursorActive
-  readonly property bool evercountSyncVisible: root.gateRows.some(function(gate) {
-    return gate.provider === "evercount"
+  readonly property bool evercountSyncVisible: root.providerRows.some(function(provider) {
+    return provider.id === "evercount" && provider.manualSync
   })
 
   signal redeem(string target)
@@ -52,15 +53,65 @@ Column {
 
   function gateDetail(gate) {
     if (!gate.synchronized) return qsTr("Checking today's activity")
-    if (gate.satisfied)
-      return qsTr("Completed · Unlocked: %1").arg(gate.targets)
+    if (gate.satisfied) {
+      const details = []
+      if (gate.unlockedTargets)
+        details.push(qsTr("Unlocked: %1").arg(gate.unlockedTargets))
+      if (gate.waitingTargets)
+        details.push(qsTr("Waiting on another prerequisite: %1").arg(gate.waitingTargets))
+      return details.length > 0 ? qsTr("Completed · %1").arg(details.join(qsTr(" · ")))
+        : qsTr("Completed")
+    }
     if (gate.kind === "count") {
       const unit = gate.remaining === 1 ? qsTr("entry") : qsTr("entries")
-      return qsTr("%1 %2 left · Unlocks: %3")
+      return qsTr("%1 %2 left · Required for: %3")
         .arg(gate.remaining).arg(unit).arg(gate.targets)
     }
-    return qsTr("%1 left · Unlocks: %2")
+    return qsTr("%1 left · Required for: %2")
       .arg(Model.formatDuration(gate.remaining)).arg(gate.targets)
+  }
+
+  function clockLabel(value) {
+    const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || ""))
+    if (!match) return String(value || "")
+    const date = new Date(2000, 0, 1, Number(match[1]), Number(match[2]))
+    return date.toLocaleTimeString(Qt.locale(), Locale.ShortFormat)
+  }
+
+  function curfewValue() {
+    const curfew = root.controller.status.curfew || {}
+    if (curfew.active) return qsTr("Active")
+    if (curfew.seconds_until_start !== null && curfew.seconds_until_start !== undefined)
+      return qsTr("In %1").arg(Model.formatCountdown(curfew.seconds_until_start))
+    return qsTr("Scheduled")
+  }
+
+  function curfewDetail() {
+    const curfew = root.controller.status.curfew || {}
+    if (curfew.active) return qsTr("Active until %1").arg(clockLabel(curfew.end))
+    return qsTr("Available %1–%2").arg(clockLabel(curfew.end)).arg(clockLabel(curfew.start))
+  }
+
+  function providerHealth(provider) {
+    if (provider.health === "healthy") return qsTr("Healthy")
+    if (provider.health === "never_synchronized") return qsTr("Not synced")
+    if (provider.health === "unavailable") return qsTr("Unavailable")
+    if (provider.health === "incompatible") return qsTr("Needs update")
+    if (provider.health === "inactive") return qsTr("Inactive")
+    return qsTr("Unknown")
+  }
+
+  function providerDetail(provider) {
+    const parts = []
+    const lastSync = new Date(String(provider.lastSyncAt || ""))
+    if (!isNaN(lastSync.getTime()))
+      parts.push(qsTr("Last sync %1").arg(lastSync.toLocaleString(Qt.locale(), Locale.ShortFormat)))
+    else if (provider.synchronized)
+      parts.push(qsTr("Evidence synchronized · Last sync time unavailable"))
+    else
+      parts.push(qsTr("No successful sync recorded"))
+    if (provider.message) parts.push(provider.message)
+    return parts.join(qsTr(" · "))
   }
 
   Text {
@@ -141,6 +192,36 @@ Column {
   }
 
   PanelSeparator {
+    visible: root.controller.available
+    foreground: root.foreground
+  }
+
+  PanelSectionHeader {
+    visible: root.controller.available
+    text: qsTr("CURFEW")
+    foreground: root.foreground
+    fontFamily: root.fontFamily
+  }
+
+  StatusRow {
+    visible: root.controller.available
+    width: root.width
+    label: qsTr("Daily curfew")
+    value: root.curfewValue()
+    detail: root.curfewDetail()
+    urgent: root.controller.status.curfew.active === true
+    foreground: root.foreground
+    dim: root.dim
+    positiveColor: Color.accent
+    urgentColor: Color.urgent
+    fontFamily: root.fontFamily
+    rowSpacing: Style.space(3)
+    labelGap: Style.space(8)
+    bodyFontSize: Style.font.body
+    captionFontSize: Style.font.caption
+  }
+
+  PanelSeparator {
     visible: root.gateRows.length > 0
     foreground: root.foreground
   }
@@ -178,6 +259,36 @@ Column {
       dim: root.dim
       fontFamily: root.fontFamily
       onActionTriggered: root.requestEvercountSync()
+    }
+  }
+
+  PanelSectionHeader {
+    visible: root.providerRows.length > 0
+    text: qsTr("PROVIDER STATUS")
+    foreground: root.foreground
+    fontFamily: root.fontFamily
+  }
+
+  Repeater {
+    model: root.providerRows
+
+    StatusRow {
+      required property var modelData
+      width: root.width
+      label: modelData.label
+      value: root.providerHealth(modelData)
+      detail: root.providerDetail(modelData)
+      positive: modelData.health === "healthy"
+      urgent: modelData.health === "unavailable" || modelData.health === "incompatible"
+      foreground: root.foreground
+      dim: root.dim
+      positiveColor: Color.accent
+      urgentColor: Color.urgent
+      fontFamily: root.fontFamily
+      rowSpacing: Style.space(3)
+      labelGap: Style.space(8)
+      bodyFontSize: Style.font.body
+      captionFontSize: Style.font.caption
     }
   }
 

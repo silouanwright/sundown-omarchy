@@ -2,6 +2,7 @@
 
 - Run `node tests/model.test.js`.
 - Run `tests/run-qml-checks` in an Omarchy session.
+- Run `tests/run-qt-quick-tests`.
 - Run `omarchy plugin validate .`.
 - Run the deterministic QML review and system `qmllint` where available.
 - Confirm `manifest.json` and the README describe the same compatibility range.

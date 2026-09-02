@@ -36,6 +36,12 @@ refreshes panel status after a successful reconciliation:
 sundown-adapter-evercount sync
 ```
 
+The panel also reads `sundown-adapter-evercount status` to show provider health
+and the last successful evidence delivery. Other providers remain explicit
+when their health or last-sync metadata is unavailable. The compatibility
+mapping and the expected provider-neutral core field are documented in
+[`docs/provider-boundary.md`](docs/provider-boundary.md).
+
 ## Install
 
 Install the Sundown core first. Then add this repository through Omarchy:
@@ -67,20 +73,26 @@ commands is the protocol contract, independent of either package version.
 ```bash
 node tests/model.test.js
 tests/run-qml-checks
+tests/run-qt-quick-tests
 omarchy plugin validate .
 ```
 
 The plugin requires no third-party QML packages.
 
+The static [Today](docs/assets/panel-today-osaka-jade.png) and
+[History](docs/assets/panel-history-catppuccin-latte.png) captures are visual-QA
+evidence for the existing panel views. They are not additional plugin surfaces.
+
 ## Privacy and permissions
 
 The plugin runs `/usr/bin/sundown status --json`, `/usr/bin/sundown report week
---json`, and—only after explicit panel actions—`/usr/bin/sundown flex redeem
-TARGET` or `/usr/bin/sundown-adapter-evercount sync`. The adapter owns its
-read-only network request and credential; the QML process never reads or passes
-the token. The plugin has no installer, privileged actions, or persistent
-state. Usage policy, counters, browser integration, and enforcement remain in
-the separately installed Sundown core.
+--json`, and `/usr/bin/sundown-adapter-evercount status`. Only explicit panel
+actions run `/usr/bin/sundown flex redeem TARGET` or
+`/usr/bin/sundown-adapter-evercount sync`. The adapter owns its read-only
+network request and credential; the QML process never reads or passes the
+token. The plugin has no installer, privileged actions, or persistent state.
+Usage policy, counters, browser integration, and enforcement remain in the
+separately installed Sundown core.
 
 ## License
 

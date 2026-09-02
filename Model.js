@@ -45,6 +45,7 @@ function emptyStatus() {
     gates: [],
     completion_gates: [],
     duration_gates: [],
+    prerequisite_providers: [],
     earned: []
   }
 }
@@ -103,6 +104,8 @@ function parseStatus(raw) {
   value.gates = Array.isArray(value.gates) ? value.gates : []
   value.completion_gates = Array.isArray(value.completion_gates) ? value.completion_gates : []
   value.duration_gates = Array.isArray(value.duration_gates) ? value.duration_gates : []
+  value.prerequisite_providers = Array.isArray(value.prerequisite_providers)
+    ? value.prerequisite_providers : []
   value.earned = Array.isArray(value.earned) ? value.earned : []
   return { ok: true, data: value, error: "" }
 }
@@ -153,15 +156,16 @@ function evidenceProvider(source) {
   return ""
 }
 
-function gateForTarget(status, target) {
+function gatesForTarget(status, target) {
   var gates = gateRows(status)
+  var result = []
   for (var i = 0; i < gates.length; i++) {
     var targets = gates[i].targetIds
     if (targets.some(function(candidate) {
       return String(candidate).toLowerCase() === String(target).toLowerCase()
-    })) return gates[i]
+    })) result.push(gates[i])
   }
-  return null
+  return result
 }
 
 function budgetRow(id, label, value, status) {
@@ -175,9 +179,14 @@ function budgetRow(id, label, value, status) {
   var remaining = restricted ? Math.max(0, number(value.available_seconds,
     number(value.remaining_seconds, dailyRemaining))) : 0
   var blockedBy = value.blocked_by || ""
-  var gate = gateForTarget(status, id)
-  var prerequisiteChecking = gate !== null && gate.synchronized === false
-  var prerequisiteLocked = gate !== null && gate.synchronized !== false && gate.satisfied !== true
+  var prerequisites = gatesForTarget(status, id)
+  var unmetPrerequisites = prerequisites.filter(function(gate) {
+    return gate.synchronized === false || gate.satisfied !== true
+  })
+  var prerequisiteChecking = unmetPrerequisites.some(function(gate) {
+    return gate.synchronized === false
+  })
+  var prerequisiteLocked = unmetPrerequisites.length > 0
   var schedule = value.schedule || null
   var pace = value.pace || null
   var paceUsed = pace ? Math.max(0, number(pace.used_seconds, 0)) : 0
@@ -204,7 +213,10 @@ function budgetRow(id, label, value, status) {
     blocked: blockedBy !== "" || prerequisiteLocked || value.action_due === true,
     reached: blockedBy === "daily-limit" || value.limit_reached === true,
     blockedBy: blockedBy,
-    gate: gate,
+    gate: unmetPrerequisites.length > 0 ? unmetPrerequisites[0]
+      : (prerequisites.length > 0 ? prerequisites[0] : null),
+    prerequisites: prerequisites,
+    unmetPrerequisites: unmetPrerequisites,
     prerequisiteChecking: prerequisiteChecking,
     prerequisiteLocked: prerequisiteLocked,
     schedule: schedule,
@@ -237,13 +249,20 @@ function budgetRows(status) {
 function budgetDetail(row) {
   row = row || {}
   if (row.restricted === false) return "Observed activity"
-  if (row.prerequisiteChecking) return "Checking " + (row.gate || {}).source + " activity"
-  if (row.prerequisiteLocked) {
-    var prerequisite = row.gate || {}
-    if (prerequisite.kind === "count")
-      return "Locked · " + String(prerequisite.remaining) + " more " + prerequisite.source
-        + (prerequisite.remaining === 1 ? " entry needed" : " entries needed")
-    return "Locked · " + formatDuration(prerequisite.remaining) + " of " + prerequisite.source + " needed"
+  var unmet = []
+  var unmetValue = row.unmetPrerequisites
+  if (unmetValue && typeof unmetValue.length === "number") {
+    for (var i = 0; i < unmetValue.length; i++) unmet.push(unmetValue[i])
+  }
+  if (unmet.length > 0) {
+    var needs = unmet.map(function(prerequisite) {
+      if (prerequisite.synchronized === false) return prerequisite.source + ": checking"
+      if (prerequisite.kind === "count")
+        return prerequisite.source + ": " + String(prerequisite.remaining)
+          + (prerequisite.remaining === 1 ? " entry" : " entries")
+      return prerequisite.source + ": " + formatDuration(prerequisite.remaining)
+    })
+    return "Locked · " + needs.join(" · ")
   }
   if (row.blockedBy === "schedule") return "Outside schedule"
   if (row.blockedBy === "prerequisite-gate") {
@@ -329,6 +348,28 @@ function gateRows(status) {
       synchronized: gate.synchronized !== false,
       satisfied: gate.satisfied === true
     })
+  })
+  rows.forEach(function(row) {
+    row.passed = row.synchronized !== false && row.satisfied === true
+  })
+  rows.forEach(function(row) {
+    row.unlockedTargetIds = row.targetIds.filter(function(target) {
+      var matches = rows.filter(function(candidate) {
+        return candidate.targetIds.some(function(candidateTarget) {
+          return String(candidateTarget).toLowerCase() === String(target).toLowerCase()
+        })
+      })
+      return matches.length > 0 && matches.every(function(candidate) { return candidate.passed })
+    })
+    row.waitingTargetIds = row.targetIds.filter(function(target) {
+      return row.unlockedTargetIds.indexOf(target) < 0
+    })
+    row.unlockedTargets = row.unlockedTargetIds.map(function(target) {
+      return targetLabel(target, status)
+    }).join(", ")
+    row.waitingTargets = row.waitingTargetIds.map(function(target) {
+      return targetLabel(target, status)
+    }).join(", ")
   })
   return rows
 }

@@ -14,7 +14,9 @@ Panel {
   readonly property string fontFamily: Style.font.family
   readonly property var budgetRows: Model.budgetRows(controller.status)
   readonly property var gateRows: Model.gateRows(controller.status)
+  readonly property var providerRows: controller.prerequisiteProviders
   readonly property var earnedRows: Model.earnedRows(controller.status)
+  readonly property var flexAuditRows: Model.flexAuditRows(controller.status)
   readonly property var weekRows: Model.weekRows(controller.report)
   readonly property var historyCategories: Model.reportCategories(controller.report, controller.status)
   readonly property real weekMaximum: Model.maximumDay(weekRows)
@@ -166,6 +168,7 @@ Panel {
       controller: root.controllerForViews
       budgetRows: root.budgetRows
       gateRows: root.gateRows
+      providerRows: root.providerRows
       earnedRows: root.earnedRows
       browserAttention: root.browserAttention
       foreground: root.foreground
@@ -183,6 +186,7 @@ Panel {
       controller: root.controllerForViews
       weekRows: root.weekRows
       categories: root.historyCategories
+      flexAuditRows: root.flexAuditRows
       weekMaximum: root.weekMaximum
       foreground: root.foreground
       dim: root.dim

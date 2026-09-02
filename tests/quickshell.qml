@@ -38,6 +38,12 @@ ShellRoot {
     if (row.metaText !== "19m / 45m today · 1h window · 15m flex")
       return fail("rolling BudgetRow did not preserve daily and flex context")
     row.destroy()
+
+    const locked = lockedBudgetComponent.createObject(root)
+    if (!locked) return fail("could not create multi-prerequisite BudgetRow")
+    if (locked.detailText !== "Locked · Reading log: 1 entry")
+      return fail("BudgetRow dropped its QML-bound unmet prerequisite list")
+    locked.destroy()
   }
 
   function checkWeekChart() {
@@ -59,11 +65,14 @@ ShellRoot {
       required: 600,
       remaining: 0,
       satisfied: true,
-      targets: "Gaming, Social"
+      targets: "Gaming, Social",
+      unlockedTargets: "Social",
+      waitingTargets: "Gaming"
     }
     if (today.gateValue(durationGate) !== "10m / 10m"
-        || today.gateDetail(durationGate) !== "Completed · Unlocked: Gaming, Social")
-      return fail("duration prerequisite progress is not explicit")
+        || today.gateDetail(durationGate)
+          !== "Completed · Unlocked: Social · Waiting on another prerequisite: Gaming")
+      return fail("multi-prerequisite readiness was not reflected per allowance")
     today.gateRows = [{
       provider: "evercount",
       source: "Morning Prayer",
@@ -76,8 +85,20 @@ ShellRoot {
       satisfied: false,
       targets: "Gaming"
     }]
+    today.providerRows = [{
+      id: "evercount",
+      label: "Evercount",
+      health: "healthy",
+      synchronized: true,
+      lastSyncAt: "2026-09-02T09:10:01-05:00",
+      message: "",
+      manualSync: true
+    }]
     if (!today.evercountSyncVisible)
       return fail("Evercount prerequisite did not expose manual sync")
+    if (today.providerHealth(today.providerRows[0]) !== "Healthy"
+        || today.providerDetail(today.providerRows[0]).indexOf("Last sync") !== 0)
+      return fail("provider health and last sync were not surfaced")
     let syncRequests = 0
     today.syncEvercount.connect(function() { syncRequests++ })
     today.requestEvercountSync()
@@ -93,7 +114,7 @@ ShellRoot {
       targets: "Facebook"
     }
     if (today.gateValue(countGate) !== "1 / 2 entries"
-        || today.gateDetail(countGate) !== "1 entry left · Unlocks: Facebook")
+        || today.gateDetail(countGate) !== "1 entry left · Required for: Facebook")
       return fail("count prerequisite progress is not explicit")
     today.destroy()
 
@@ -101,6 +122,12 @@ ShellRoot {
     if (!history || history.implicitHeight <= 0)
       return fail("could not create the History panel view")
     history.destroy()
+
+    const statusRow = statusRowComponent.createObject(root)
+    if (!statusRow || statusRow.implicitHeight <= 0
+        || statusRow.value !== "Healthy" || !statusRow.positive)
+      return fail("could not create a positive provider status row")
+    statusRow.destroy()
   }
 
   QtObject {
@@ -191,6 +218,40 @@ ShellRoot {
   }
 
   Component {
+    id: lockedBudgetComponent
+    Plugin.BudgetRow {
+      width: 380
+      modelData: ({
+        label: "Gaming",
+        restricted: true,
+        used: 1800,
+        limit: 3600,
+        meterUsed: 1800,
+        meterLimit: 3600,
+        meterRatio: 0.5,
+        meterScope: "daily",
+        active: false,
+        blocked: true,
+        blockedBy: "prerequisite-gate",
+        prerequisiteLocked: true,
+        prerequisiteChecking: false,
+        unmetPrerequisites: [{
+          source: "Reading log",
+          synchronized: true,
+          kind: "count",
+          remaining: 1
+        }],
+        gate: null,
+        schedule: null,
+        pace: null,
+        flexRemaining: 900,
+        earnedBank: 0,
+        warningMinutes: 50
+      })
+    }
+  }
+
+  Component {
     id: weekChartComponent
     Plugin.WeekChart {
       width: 380
@@ -217,6 +278,26 @@ ShellRoot {
   }
 
   Component {
+    id: statusRowComponent
+    Plugin.StatusRow {
+      width: 380
+      label: "Evercount"
+      value: "Healthy"
+      detail: "Last sync 9/2/26, 9:10 AM"
+      positive: true
+      foreground: "#202020"
+      dim: "#707070"
+      positiveColor: "#008000"
+      urgentColor: "#c00000"
+      fontFamily: "sans-serif"
+      rowSpacing: 3
+      labelGap: 8
+      bodyFontSize: 14
+      captionFontSize: 11
+    }
+  }
+
+  Component {
     id: historyViewComponent
     Plugin.HistoryView {
       width: 380
@@ -225,6 +306,11 @@ ShellRoot {
         { date: "2026-09-01", label: "T", seconds: 600, recorded: true }
       ]
       categories: [{ label: "Gaming", seconds: 600 }]
+      flexAuditRows: [{
+        label: "Gaming",
+        seconds: 900,
+        redeemedAt: "2026-09-02T09:30:00-05:00"
+      }]
       weekMaximum: 600
     }
   }

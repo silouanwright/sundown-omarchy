@@ -17,7 +17,6 @@ Column {
   property color dim: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.62)
   property string fontFamily: Style.font.family
   readonly property var targets: Model.flexTargets(status)
-  readonly property var auditRows: Model.flexAuditRows(status)
   readonly property var flex: status && status.flex ? status.flex : Model.emptyStatus().flex
   property int cursorIndex: 0
   property bool cursorActive: false
@@ -68,11 +67,6 @@ Column {
     expanded = false
     cursorActive = false
     cursorIndex = 0
-  }
-
-  function timeLabel(value) {
-    const date = new Date(String(value || ""))
-    return isNaN(date.getTime()) ? "" : date.toLocaleTimeString(Qt.locale(), Locale.ShortFormat)
   }
 
   function clampCursor() {
@@ -205,53 +199,6 @@ Column {
             Layout.alignment: Qt.AlignVCenter
             Accessible.ignored: true
           }
-        }
-      }
-    }
-  }
-
-  Column {
-    visible: root.auditRows.length > 0
-    width: parent.width
-    spacing: Style.space(5)
-
-    PanelSectionHeader {
-      text: qsTr("USED TODAY")
-      foreground: root.foreground
-      fontFamily: root.fontFamily
-    }
-
-    Repeater {
-      model: root.auditRows
-
-      Item {
-        id: auditRow
-
-        required property var modelData
-        width: root.width
-        implicitHeight: Math.max(auditLabel.implicitHeight, auditTime.implicitHeight)
-
-        Text {
-          id: auditLabel
-          anchors.left: parent.left
-          anchors.right: auditTime.left
-          anchors.rightMargin: Style.space(8)
-          text: qsTr("%1 → %2").arg(Model.formatDuration(auditRow.modelData.seconds)).arg(auditRow.modelData.label)
-          textFormat: Text.PlainText
-          color: root.foreground
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-          elide: Text.ElideRight
-        }
-
-        Text {
-          id: auditTime
-          anchors.right: parent.right
-          text: root.timeLabel(auditRow.modelData.redeemedAt)
-          textFormat: Text.PlainText
-          color: root.dim
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
         }
       }
     }

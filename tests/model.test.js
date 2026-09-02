@@ -9,6 +9,12 @@ const context = { Date, JSON, Math, Number, Object, String, Array, RegExp, isFin
 vm.createContext(context)
 vm.runInContext(source, context)
 
+const adapterSource = fs.readFileSync(path.join(__dirname, "..", "PrerequisiteAdapter.js"), "utf8")
+  .replace(/^\.pragma library\s*/m, "")
+const adapter = { Date, JSON, Math, Number, Object, String, Array, RegExp, isFinite }
+vm.createContext(adapter)
+vm.runInContext(adapterSource, adapter)
+
 assert.equal(context.parseStatus("nope").ok, false)
 assert.equal(context.parseStatus('{"version":0}').compatibility, "core-too-old")
 assert.equal(context.parseStatus('{"version":2}').compatibility, "plugin-too-old")
@@ -151,7 +157,7 @@ assert.equal(adaptiveBudgets[0].meterRatio, 1 / 3)
 assert.equal(adaptiveBudgets[0].meterScope, "rolling")
 assert.equal(adaptiveBudgets[0].blockedBy, "prerequisite-gate")
 assert.equal(adaptiveBudgets[0].prerequisiteLocked, true)
-assert.equal(context.budgetDetail(adaptiveBudgets[0]), "Locked · 10m of Journaling needed")
+assert.equal(context.budgetDetail(adaptiveBudgets[0]), "Locked · Journaling: 10m")
 assert.equal(adaptiveBudgets[1].label, "Other Games")
 assert.equal(context.totalToday(adaptiveBudgets), 1500)
 assert.equal(context.budgetDetail({
@@ -230,7 +236,7 @@ assert.equal(journalGates[0].kind, "count")
 assert.equal(journalGates[0].remaining, 1)
 assert.equal(journalGates[1].source, "Journal")
 assert.equal(journalGates[1].ratio, 0.7)
-assert.equal(context.budgetDetail(context.budgetRows(journalStatus)[0]), "Locked · 3m of Journal needed")
+assert.equal(context.budgetDetail(context.budgetRows(journalStatus)[0]), "Locked · Journal: 3m")
 
 const syncingStatus = context.parseStatus(JSON.stringify({
   version: 1,
@@ -255,8 +261,8 @@ const syncingStatus = context.parseStatus(JSON.stringify({
 })).data
 assert.equal(context.gateRows(syncingStatus)[0].synchronized, false)
 assert.equal(context.budgetRows(syncingStatus)[0].prerequisiteChecking, true)
-assert.equal(context.budgetRows(syncingStatus)[0].prerequisiteLocked, false)
-assert.equal(context.budgetDetail(context.budgetRows(syncingStatus)[0]), "Checking Journal activity")
+assert.equal(context.budgetRows(syncingStatus)[0].prerequisiteLocked, true)
+assert.equal(context.budgetDetail(context.budgetRows(syncingStatus)[0]), "Locked · Journal: checking")
 
 const evercountStatus = context.parseStatus(JSON.stringify({
   version: 1,
@@ -273,6 +279,97 @@ const evercountStatus = context.parseStatus(JSON.stringify({
 })).data
 assert.equal(context.gateRows(evercountStatus)[0].provider, "evercount")
 assert.equal(context.gateRows(journalStatus)[0].provider, "journal")
+
+const multiplePrerequisiteStatus = context.parseStatus(JSON.stringify({
+  version: 1,
+  steam: {
+    name: "gaming",
+    daily_limit_seconds: 7200,
+    used_seconds: 0,
+    available_seconds: 0,
+    blocked_by: "prerequisite-gate"
+  },
+  duration_gates: [{
+    name: "journal-before-distractions",
+    source: "/apps/voice-journal/recorded-duration",
+    targets: ["steam"],
+    recorded_seconds: 600,
+    required_seconds: 600,
+    remaining_seconds: 0,
+    synchronized: true,
+    satisfied: true
+  }],
+  completion_gates: [{
+    name: "selected-counter-before-distractions",
+    source: "/services/evercount/selected-counter-daily-goal",
+    targets: ["steam"],
+    active_completions: 0,
+    required_completions: 1,
+    remaining_completions: 1,
+    synchronized: true,
+    satisfied: false
+  }]
+})).data
+const multiplePrerequisiteRows = context.gateRows(multiplePrerequisiteStatus)
+const multiplePrerequisiteBudget = context.budgetRows(multiplePrerequisiteStatus)[0]
+assert.equal(multiplePrerequisiteBudget.prerequisites.length, 2)
+assert.equal(multiplePrerequisiteBudget.unmetPrerequisites.length, 1)
+assert.equal(multiplePrerequisiteBudget.unmetPrerequisites[0].provider, "evercount")
+assert.equal(multiplePrerequisiteBudget.prerequisiteLocked, true)
+assert.equal(multiplePrerequisiteRows[0].unlockedTargets, "")
+assert.equal(multiplePrerequisiteRows[0].waitingTargets, "Gaming")
+assert.equal(multiplePrerequisiteRows[1].unlockedTargets, "")
+
+multiplePrerequisiteStatus.completion_gates[0].active_completions = 1
+multiplePrerequisiteStatus.completion_gates[0].remaining_completions = 0
+multiplePrerequisiteStatus.completion_gates[0].satisfied = true
+const unlockedRows = context.gateRows(multiplePrerequisiteStatus)
+const unlockedBudget = context.budgetRows(multiplePrerequisiteStatus)[0]
+assert.equal(unlockedBudget.unmetPrerequisites.length, 0)
+assert.equal(unlockedBudget.prerequisiteLocked, false)
+assert.equal(unlockedRows[0].unlockedTargets, "Gaming")
+assert.equal(unlockedRows[1].unlockedTargets, "Gaming")
+
+const directStatus = adapter.parseDirectStatus(JSON.stringify({
+  version: 1,
+  provider: "evercount",
+  health: "healthy",
+  policyDate: "2026-09-02",
+  progressSeconds: 600,
+  requiredSeconds: 1800,
+  satisfied: false,
+  lastAttemptAt: "2026-09-02T09:10:00-05:00",
+  lastSuccessfulReadAt: "2026-09-02T09:10:00-05:00",
+  lastSuccessfulDeliveryAt: "2026-09-02T09:10:01-05:00"
+}), "evercount")
+assert.equal(directStatus.ok, true)
+assert.equal(directStatus.provider.health, "healthy")
+assert.equal(directStatus.provider.lastSyncAt, "2026-09-02T09:10:01-05:00")
+assert.equal(directStatus.provider.manualSync, true)
+
+const providerRows = adapter.providers(multiplePrerequisiteStatus, {
+  evercount: directStatus.provider
+})
+assert.deepEqual(Array.from(providerRows, row => row.id), ["evercount", "journal"])
+assert.equal(providerRows[0].health, "healthy")
+assert.equal(providerRows[0].lastSyncAt, "2026-09-02T09:10:01-05:00")
+assert.equal(providerRows[1].health, "unknown")
+assert.equal(providerRows[1].synchronized, true)
+
+multiplePrerequisiteStatus.prerequisite_providers = [{
+  id: "evercount",
+  label: "Counter service",
+  health: "inactive",
+  synchronized: false,
+  last_sync_at: "2026-09-02T08:00:00-05:00",
+  manual_sync: false
+}]
+const canonicalProviderRows = adapter.providers(multiplePrerequisiteStatus, {
+  evercount: directStatus.provider
+})
+assert.equal(canonicalProviderRows[0].label, "Counter service")
+assert.equal(canonicalProviderRows[0].health, "inactive")
+assert.equal(canonicalProviderRows[0].lastSyncAt, "2026-09-02T08:00:00-05:00")
 
 assert.equal(context.earnedRows(adaptiveStatus)[0].bank, 300)
 assert.equal(context.flexTargets(adaptiveStatus)[1].label, "Other Games")

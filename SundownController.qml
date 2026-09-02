@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell.Io
 import "Model.js" as Model
+import "PrerequisiteAdapter.js" as PrerequisiteAdapter
 
 Item {
   id: root
@@ -24,6 +25,9 @@ Item {
   property bool evercountSyncBusy: false
   property string evercountSyncMessage: ""
   property string evercountSyncError: ""
+  property var directProviderStatuses: ({})
+  readonly property var prerequisiteProviders: PrerequisiteAdapter.providers(
+    status, directProviderStatuses)
   property string _statusOutput: ""
   property string _statusStderr: ""
   property string _reportOutput: ""
@@ -32,8 +36,11 @@ Item {
   property string _flexStderr: ""
   property string _evercountSyncOutput: ""
   property string _evercountSyncStderr: ""
+  property string _evercountStatusOutput: ""
+  property string _evercountStatusStderr: ""
   property bool _statusCompleted: false
   property bool _reportCompleted: false
+  property bool _evercountStatusCompleted: false
 
   visible: false
   width: 0
@@ -58,6 +65,27 @@ Item {
   function refreshAll() {
     refreshStatus()
     refreshReport()
+  }
+
+  function setDirectProviderStatus(provider) {
+    const next = Object.assign({}, directProviderStatuses)
+    next[provider.id] = provider
+    directProviderStatuses = next
+  }
+
+  function failDirectProviderStatus(id, message) {
+    setDirectProviderStatus(PrerequisiteAdapter.failedProvider(
+      directProviderStatuses[id], id, message))
+  }
+
+  function refreshProviderStatuses() {
+    if (PrerequisiteAdapter.providerIds(status).indexOf("evercount") < 0) return
+    if (PrerequisiteAdapter.hasCanonicalProvider(status, "evercount")) return
+    if (evercountStatusProcess.running) return
+    _evercountStatusOutput = ""
+    _evercountStatusStderr = ""
+    _evercountStatusCompleted = false
+    evercountStatusProcess.running = true
   }
 
   function redeemFlex(target) {
@@ -112,6 +140,7 @@ Item {
           root.everLoaded = true
           root.statusCompatibility = ""
           root.statusError = ""
+          root.refreshProviderStatuses()
         } else {
           root.statusCompatibility = parsed.compatibility || ""
           root.statusError = root.compatibilityMessage(root.statusCompatibility, parsed.error)
@@ -130,6 +159,37 @@ Item {
       root.statusError = root._statusStderr || (root.everLoaded
         ? qsTr("Could not refresh status; showing the last update")
         : qsTr("Sundown is not available"))
+    }
+  }
+
+  Process {
+    id: evercountStatusProcess
+    command: [root.evercountCommand, "status"]
+    onRunningChanged: {
+      if (!running && !root._evercountStatusCompleted) {
+        root._evercountStatusCompleted = true
+        root.failDirectProviderStatus("evercount", qsTr("Evercount status is unavailable"))
+      }
+    }
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        root._evercountStatusOutput = text
+        root._evercountStatusCompleted = true
+        const parsed = PrerequisiteAdapter.parseDirectStatus(text, "evercount")
+        if (parsed.ok) root.setDirectProviderStatus(parsed.provider)
+        else root.failDirectProviderStatus("evercount", parsed.error)
+      }
+    }
+    stderr: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root._evercountStatusStderr = String(text || "").trim()
+    }
+    onExited: function(exitCode) {
+      root._evercountStatusCompleted = true
+      if (exitCode === 0 && root._evercountStatusOutput !== "") return
+      root.failDirectProviderStatus("evercount", root._evercountStatusStderr
+        || qsTr("Evercount status is unavailable"))
     }
   }
 
@@ -182,6 +242,7 @@ Item {
       if (exitCode === 0) {
         root.evercountSyncMessage = qsTr("Evercount synced")
         root.refreshAll()
+        root.refreshProviderStatuses()
       } else {
         root.evercountSyncError = root._evercountSyncStderr
           || qsTr("Could not sync Evercount")

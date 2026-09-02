@@ -32,6 +32,7 @@ Column {
   readonly property string stateSuffix: modelData.prerequisiteChecking ? qsTr(" · checking")
     : modelData.prerequisiteLocked ? qsTr(" · locked")
     : modelData.active ? qsTr(" · active") : ""
+  readonly property string detailText: Model.budgetDetail(modelData)
 
   width: parent ? parent.width : implicitWidth
   spacing: Style.space(5)
@@ -112,14 +113,14 @@ Column {
   Item {
     visible: root.modelData.restricted
     width: parent.width
-    implicitHeight: Math.max(detailText.implicitHeight, timingText.implicitHeight)
+    implicitHeight: Math.max(detailLabel.implicitHeight, timingText.implicitHeight)
 
     Text {
-      id: detailText
+      id: detailLabel
       anchors.left: parent.left
       anchors.right: timingText.left
       anchors.rightMargin: Style.space(8)
-      text: Model.budgetDetail(root.modelData)
+      text: root.detailText
       textFormat: Text.PlainText
       color: root.modelData.blocked ? Color.urgent : root.dim
       font.family: root.fontFamily

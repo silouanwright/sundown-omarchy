@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+
+QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner \
+  -input "$repo_dir/tests" \
+  -import "$repo_dir"

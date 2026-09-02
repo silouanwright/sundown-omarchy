@@ -11,6 +11,7 @@ Column {
   required property var controller
   property var weekRows: []
   property var categories: []
+  property var flexAuditRows: []
   property real weekMaximum: 0
   property color foreground: Color.popups.text
   property color dim: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.62)
@@ -18,6 +19,11 @@ Column {
 
   width: parent ? parent.width : implicitWidth
   spacing: Style.space(14)
+
+  function timeLabel(value) {
+    const date = new Date(String(value || ""))
+    return isNaN(date.getTime()) ? "" : date.toLocaleTimeString(Qt.locale(), Locale.ShortFormat)
+  }
 
   Item {
     width: parent.width
@@ -110,6 +116,55 @@ Column {
         color: root.dim
         font.family: root.fontFamily
         font.pixelSize: Style.font.body
+      }
+    }
+  }
+
+  PanelSeparator {
+    visible: root.flexAuditRows.length > 0
+    foreground: root.foreground
+  }
+
+  PanelSectionHeader {
+    visible: root.flexAuditRows.length > 0
+    text: qsTr("FLEX USED TODAY")
+    foreground: root.foreground
+    fontFamily: root.fontFamily
+  }
+
+  Repeater {
+    model: root.flexAuditRows
+
+    Item {
+      id: flexAuditRow
+
+      required property var modelData
+      width: root.width
+      implicitHeight: Math.max(flexAuditLabel.implicitHeight, flexAuditTime.implicitHeight)
+
+      Text {
+        id: flexAuditLabel
+        anchors.left: parent.left
+        anchors.right: flexAuditTime.left
+        anchors.rightMargin: Style.space(8)
+        text: qsTr("%1 → %2")
+          .arg(Model.formatDuration(flexAuditRow.modelData.seconds))
+          .arg(flexAuditRow.modelData.label)
+        textFormat: Text.PlainText
+        color: root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
+        elide: Text.ElideRight
+      }
+
+      Text {
+        id: flexAuditTime
+        anchors.right: parent.right
+        text: root.timeLabel(flexAuditRow.modelData.redeemedAt)
+        textFormat: Text.PlainText
+        color: root.dim
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.caption
       }
     }
   }
