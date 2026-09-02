@@ -11,6 +11,7 @@ Item {
   property string evercountCommand: "/usr/bin/sundown-adapter-evercount"
   property bool statusKnown: false
   property bool reportKnown: false
+  property bool reportEverLoaded: false
   property bool adapterStatusKnown: false
   property bool available: false
   property bool everLoaded: false
@@ -30,6 +31,7 @@ Item {
   property string evercountSyncError: ""
   readonly property var prerequisiteProviders: PrerequisiteAdapter.providers(adapterStatus)
   readonly property var adapterPrerequisites: PrerequisiteAdapter.prerequisites(adapterStatus)
+  readonly property bool reportBusy: reportProcess.running
   readonly property list<string> adapterStatusCommand: [
     root.sundownCommand, "adapters", "status", "--json"
   ]
@@ -264,7 +266,9 @@ Item {
       if (!running && !root._reportCompleted) {
         root._reportCompleted = true
         root.reportKnown = true
-        root.reportError = qsTr("Could not load Screen Time history")
+        root.reportError = root.reportEverLoaded
+          ? qsTr("Could not refresh history")
+          : qsTr("Could not load Screen Time history")
       }
     }
     stdout: StdioCollector {
@@ -275,6 +279,7 @@ Item {
         if (parsed.ok) {
           root.report = parsed.data
           root.reportKnown = true
+          root.reportEverLoaded = true
           root.reportCompatibility = ""
           root.reportError = ""
         } else {
@@ -291,7 +296,9 @@ Item {
       root._reportCompleted = true
       root.reportKnown = true
       if (exitCode === 0 && root._reportOutput !== "") return
-      root.reportError = root._reportStderr || qsTr("Could not load Screen Time history")
+      root.reportError = root.reportEverLoaded
+        ? qsTr("Could not refresh history")
+        : (root._reportStderr || qsTr("Could not load Screen Time history"))
     }
   }
 

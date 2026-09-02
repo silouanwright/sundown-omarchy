@@ -14,11 +14,26 @@ Column {
   property var flexAuditRows: []
   property real weekMaximum: 0
   property color foreground: Color.popups.text
+  property color urgent: Color.urgent
   property color dim: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.62)
   property string fontFamily: Style.font.family
+  readonly property string viewState: historyState.viewState
+  readonly property bool showHistoryContent: historyState.showHistoryContent
+  readonly property bool showRefreshStatus: historyState.showRefreshStatus
+  readonly property string refreshStatusText: historyState.refreshStatusText
+  readonly property string stateTitle: historyState.stateTitle
+  readonly property string stateDetail: historyState.stateDetail
 
   width: parent ? parent.width : implicitWidth
   spacing: Style.space(14)
+
+  HistoryState {
+    id: historyState
+    reportEverLoaded: root.controller.reportEverLoaded
+    reportBusy: root.controller.reportBusy
+    reportError: root.controller.reportError
+    recordedDays: Number(root.controller.report.recorded_days || 0)
+  }
 
   function timeLabel(value) {
     const date = new Date(String(value || ""))
@@ -43,10 +58,10 @@ Column {
 
     Text {
       id: historyTotal
+      visible: root.showHistoryContent
       anchors.right: parent.right
       anchors.verticalCenter: parent.verticalCenter
-      text: root.controller.reportKnown
-        ? Model.formatDuration(Model.reportTotal(root.controller.report)) : qsTr("Loading…")
+      text: Model.formatDuration(Model.reportTotal(root.controller.report))
       textFormat: Text.PlainText
       color: root.dim
       font.family: root.fontFamily
@@ -54,8 +69,52 @@ Column {
     }
   }
 
+  Text {
+    visible: root.showRefreshStatus
+    width: parent.width
+    text: root.refreshStatusText
+    textFormat: Text.PlainText
+    color: root.controller.reportError !== "" ? root.urgent : root.dim
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.caption
+    horizontalAlignment: Text.AlignHCenter
+    wrapMode: Text.WordWrap
+  }
+
+  Column {
+    visible: !root.showHistoryContent
+    width: parent.width
+    spacing: Style.space(4)
+
+    Text {
+      width: parent.width
+      topPadding: Style.space(8)
+      text: root.stateTitle
+      textFormat: Text.PlainText
+      color: root.viewState === "error" ? root.urgent : root.foreground
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.body
+      font.bold: true
+      horizontalAlignment: Text.AlignHCenter
+      wrapMode: Text.WordWrap
+    }
+
+    Text {
+      visible: root.stateDetail !== ""
+      width: parent.width
+      bottomPadding: Style.space(8)
+      text: root.stateDetail
+      textFormat: Text.PlainText
+      color: root.dim
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.caption
+      horizontalAlignment: Text.AlignHCenter
+      wrapMode: Text.WordWrap
+    }
+  }
+
   WeekChart {
-    visible: root.weekRows.length > 0
+    visible: root.showHistoryContent && root.weekRows.length > 0
     width: parent.width
     rows: root.weekRows
     maximum: root.weekMaximum
@@ -66,7 +125,7 @@ Column {
   }
 
   Text {
-    visible: root.controller.reportKnown && root.controller.reportError === ""
+    visible: root.showHistoryContent
     width: parent.width
     text: Model.recordedDaysLabel(root.controller.report.recorded_days)
       + qsTr(" · unrecorded days are unknown")
@@ -79,14 +138,14 @@ Column {
   }
 
   PanelSectionHeader {
-    visible: root.controller.reportKnown && root.categories.length > 0
+    visible: root.showHistoryContent && root.categories.length > 0
     text: qsTr("BREAKDOWN")
     foreground: root.foreground
     fontFamily: root.fontFamily
   }
 
   Repeater {
-    model: root.controller.reportKnown ? root.categories : []
+    model: root.showHistoryContent ? root.categories : []
 
     Item {
       id: historyRow
@@ -169,15 +228,4 @@ Column {
     }
   }
 
-  Text {
-    visible: root.controller.reportError !== ""
-    width: parent.width
-    text: root.controller.reportError
-    textFormat: Text.PlainText
-    color: Color.urgent
-    font.family: root.fontFamily
-    font.pixelSize: Style.font.caption
-    horizontalAlignment: Text.AlignHCenter
-    wrapMode: Text.WordWrap
-  }
 }

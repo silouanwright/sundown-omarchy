@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+state=${1:?usage: render-history-preview STATE OUTPUT.png [THEME]}
+output=${2:?usage: render-history-preview STATE OUTPUT.png [THEME]}
+theme=${3:-}
+case "$state" in
+  empty|error|stale) ;;
+  *)
+    printf 'unsupported history state: %s\n' "$state" >&2
+    exit 2
+    ;;
+esac
+test_dir=$(mktemp -d)
+cleanup() {
+  find "$test_dir" -mindepth 1 -delete
+  rmdir "$test_dir"
+}
+trap cleanup EXIT
+
+ln -s "$repo_dir" "$test_dir/Plugin"
+ln -s /usr/share/omarchy/shell/Commons "$test_dir/Commons"
+ln -s /usr/share/omarchy/shell/Ui "$test_dir/Ui"
+ln -s "$repo_dir/tests/history-preview.qml" "$test_dir/shell.qml"
+
+if [[ -n "$theme" && "$theme" != "catppuccin-latte" ]]; then
+  printf 'unsupported preview theme: %s\n' "$theme" >&2
+  exit 2
+fi
+
+SUNDOWN_HISTORY_PREVIEW_STATE="$state" \
+SUNDOWN_HISTORY_PREVIEW_OUTPUT="$output" \
+SUNDOWN_HISTORY_PREVIEW_THEME="$theme" \
+  timeout 10 quickshell --no-color -p "$test_dir/shell.qml"

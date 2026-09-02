@@ -158,6 +158,8 @@ ShellRoot {
     const history = historyViewComponent.createObject(root)
     if (!history || history.implicitHeight <= 0)
       return fail("could not create the History panel view")
+    if (history.viewState !== "content" || !history.showHistoryContent)
+      return fail("History did not recognize a valid loaded report")
     history.destroy()
 
     const statusRow = statusRowComponent.createObject(root)
@@ -173,6 +175,8 @@ ShellRoot {
     property string statusCompatibility: ""
     property bool available: true
     property string statusError: ""
+    property bool reportBusy: false
+    property bool reportEverLoaded: true
     property bool adapterStatusKnown: true
     property string adapterStatusError: ""
     property bool flexBusy: false
@@ -383,6 +387,8 @@ ShellRoot {
           return root.fail("failed commands did not settle into their error states")
         if (root.controller.evercountSyncError !== qsTr("Could not start the Evercount adapter"))
           return root.fail("failed Evercount sync did not settle into its error state")
+        if (root.controller.reportBusy || root.controller.reportEverLoaded)
+          return root.fail("a failed first report load was treated as valid history")
         root.checkFlexSection()
         root.checkRollingBudgetRow()
         root.checkWeekChart()
