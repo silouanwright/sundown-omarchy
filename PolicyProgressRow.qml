@@ -32,9 +32,8 @@ Column {
 
     Text {
       id: title
-      anchors.left: actionButton.visible ? actionButton.right : parent.left
-      anchors.leftMargin: actionButton.visible ? Style.space(6) : 0
-      anchors.right: amount.left
+      anchors.left: parent.left
+      anchors.right: actionButton.visible ? actionButton.left : amount.left
       anchors.rightMargin: Style.space(8)
       anchors.verticalCenter: parent.verticalCenter
       text: root.label
@@ -61,7 +60,8 @@ Column {
     PanelActionButton {
       id: actionButton
       visible: root.actionVisible
-      anchors.left: parent.left
+      anchors.right: amount.left
+      anchors.rightMargin: Style.space(6)
       anchors.verticalCenter: parent.verticalCenter
       iconText: "󰑐"
       tooltipText: root.actionTooltip
