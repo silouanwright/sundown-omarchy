@@ -32,9 +32,11 @@ Column {
 
     Text {
       id: title
-      anchors.left: parent.left
+      anchors.left: actionButton.visible ? actionButton.right : parent.left
+      anchors.leftMargin: actionButton.visible ? Style.space(6) : 0
       anchors.right: amount.left
       anchors.rightMargin: Style.space(8)
+      anchors.verticalCenter: parent.verticalCenter
       text: root.label
       textFormat: Text.PlainText
       color: root.foreground
@@ -46,8 +48,7 @@ Column {
 
     Text {
       id: amount
-      anchors.right: actionButton.visible ? actionButton.left : parent.right
-      anchors.rightMargin: actionButton.visible ? Style.space(6) : 0
+      anchors.right: parent.right
       anchors.verticalCenter: parent.verticalCenter
       text: root.value
       textFormat: Text.PlainText
@@ -60,7 +61,7 @@ Column {
     PanelActionButton {
       id: actionButton
       visible: root.actionVisible
-      anchors.right: parent.right
+      anchors.left: parent.left
       anchors.verticalCenter: parent.verticalCenter
       iconText: "󰑐"
       tooltipText: root.actionTooltip
