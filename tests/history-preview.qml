@@ -9,11 +9,11 @@ ShellRoot {
   readonly property string previewState: Quickshell.env("SUNDOWN_HISTORY_PREVIEW_STATE")
   readonly property string outputPath: Quickshell.env("SUNDOWN_HISTORY_PREVIEW_OUTPUT")
   readonly property bool light: Quickshell.env("SUNDOWN_HISTORY_PREVIEW_THEME") === "catppuccin-latte"
-  readonly property color previewBackground: light ? "#eff1f5" : Color.popups.background
-  readonly property color previewForeground: light ? "#4c4f69" : Color.popups.text
-  readonly property color previewUrgent: light ? "#d20f39" : Color.urgent
-  readonly property bool stale: previewState === "stale"
-  readonly property bool failed: previewState === "error"
+  readonly property color previewBackground: shell.light ? "#eff1f5" : Color.popups.background
+  readonly property color previewForeground: shell.light ? "#4c4f69" : Color.popups.text
+  readonly property color previewUrgent: shell.light ? "#d20f39" : Color.urgent
+  readonly property bool stale: shell.previewState === "stale"
+  readonly property bool failed: shell.previewState === "error"
 
   QtObject {
     id: controller
