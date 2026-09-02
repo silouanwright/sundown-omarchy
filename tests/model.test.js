@@ -330,46 +330,105 @@ assert.equal(unlockedBudget.prerequisiteLocked, false)
 assert.equal(unlockedRows[0].unlockedTargets, "Gaming")
 assert.equal(unlockedRows[1].unlockedTargets, "Gaming")
 
-const directStatus = adapter.parseDirectStatus(JSON.stringify({
+const aggregateDocument = {
+  version: 1,
+  adapters: [{
+    version: 1,
+    adapterId: "evercount",
+    displayName: "Evercount",
+    health: "unavailable",
+    policyDate: "2026-09-02",
+    transport: "scheduled_pull",
+    manualSync: true,
+    prerequisites: [{
+      gateId: "selected-counter-before-distractions",
+      source: "/services/evercount/selected-counter-daily-goal",
+      kind: "completion",
+      progress: { value: 4.5, unit: "provider_units" },
+      requirement: { value: 5, unit: "provider_units" },
+      satisfied: false,
+      synchronized: true,
+      targets: ["steam"]
+    }],
+    lastTrigger: "scheduled_pull",
+    lastAttemptAt: "2026-09-02T09:11:00-05:00",
+    lastSuccessfulReadAt: "2026-09-02T09:10:00-05:00",
+    lastSuccessfulSyncAt: "2026-09-02T09:10:01-05:00",
+    nextScheduledSyncAt: "2026-09-02T09:15:00-05:00",
+    error: {
+      code: "provider-timeout",
+      message: "Evercount did not respond.",
+      action: "Check the connection, then sync again.",
+      retryable: true,
+      occurredAt: "2026-09-02T09:11:00-05:00"
+    }
+  }, {
+    version: 1,
+    adapterId: "journal",
+    displayName: "Voice Journal",
+    health: "healthy",
+    policyDate: "2026-09-02",
+    transport: "observable",
+    manualSync: false,
+    prerequisites: [{
+      gateId: "journal-before-distractions",
+      source: "/apps/voice-journal/recorded-duration",
+      kind: "duration",
+      progress: { value: 600, unit: "seconds" },
+      requirement: { value: 600, unit: "seconds" },
+      satisfied: true,
+      synchronized: true,
+      targets: ["steam"]
+    }],
+    lastTrigger: "observable_change",
+    lastAttemptAt: "2026-09-02T09:09:00-05:00",
+    lastSuccessfulReadAt: "2026-09-02T09:09:00-05:00",
+    lastSuccessfulSyncAt: "2026-09-02T09:09:01-05:00",
+    nextScheduledSyncAt: null,
+    error: null
+  }]
+}
+const aggregateStatus = adapter.parseAggregateStatus(JSON.stringify(aggregateDocument))
+assert.equal(aggregateStatus.ok, true)
+const providerRows = adapter.providers(aggregateStatus.data)
+assert.deepEqual(Array.from(providerRows, row => row.id), ["evercount", "journal"])
+assert.equal(providerRows[0].health, "unavailable")
+assert.equal(providerRows[0].lastSyncAt, "2026-09-02T09:10:01-05:00")
+assert.equal(providerRows[0].lastReadAt, "2026-09-02T09:10:00-05:00")
+assert.equal(providerRows[0].errorMessage, "Evercount did not respond.")
+assert.equal(providerRows[0].errorAction, "Check the connection, then sync again.")
+assert.equal(adapter.providerManualSync(aggregateStatus.data, "evercount"), true)
+assert.equal(adapter.providerManualSync(aggregateStatus.data, "journal"), false)
+
+const aggregateGates = adapter.prerequisites(aggregateStatus.data)
+assert.deepEqual(Array.from(aggregateGates, gate => gate.gateId), [
+  "selected-counter-before-distractions", "journal-before-distractions"
+])
+const metricRows = context.gateRows(multiplePrerequisiteStatus, aggregateGates)
+const metricEvercount = metricRows.find(row => row.id === "selected-counter-before-distractions")
+assert.equal(metricEvercount.provider, "evercount")
+assert.equal(metricEvercount.metricUnit, "provider_units")
+assert.equal(metricEvercount.used, 4.5)
+assert.equal(metricEvercount.required, 5)
+assert.equal(metricEvercount.satisfied, true)
+assert.equal(metricEvercount.adapterSatisfied, false)
+
+assert.equal(adapter.parseAggregateStatus(JSON.stringify({
   version: 1,
   provider: "evercount",
-  health: "healthy",
-  policyDate: "2026-09-02",
-  progressSeconds: 600,
-  requiredSeconds: 1800,
-  satisfied: false,
-  lastAttemptAt: "2026-09-02T09:10:00-05:00",
-  lastSuccessfulReadAt: "2026-09-02T09:10:00-05:00",
-  lastSuccessfulDeliveryAt: "2026-09-02T09:10:01-05:00"
-}), "evercount")
-assert.equal(directStatus.ok, true)
-assert.equal(directStatus.provider.health, "healthy")
-assert.equal(directStatus.provider.lastSyncAt, "2026-09-02T09:10:01-05:00")
-assert.equal(directStatus.provider.manualSync, true)
-
-const providerRows = adapter.providers(multiplePrerequisiteStatus, {
-  evercount: directStatus.provider
-})
-assert.deepEqual(Array.from(providerRows, row => row.id), ["evercount", "journal"])
-assert.equal(providerRows[0].health, "healthy")
-assert.equal(providerRows[0].lastSyncAt, "2026-09-02T09:10:01-05:00")
-assert.equal(providerRows[1].health, "unknown")
-assert.equal(providerRows[1].synchronized, true)
-
-multiplePrerequisiteStatus.prerequisite_providers = [{
-  id: "evercount",
-  label: "Counter service",
-  health: "inactive",
-  synchronized: false,
-  last_sync_at: "2026-09-02T08:00:00-05:00",
-  manual_sync: false
-}]
-const canonicalProviderRows = adapter.providers(multiplePrerequisiteStatus, {
-  evercount: directStatus.provider
-})
-assert.equal(canonicalProviderRows[0].label, "Counter service")
-assert.equal(canonicalProviderRows[0].health, "inactive")
-assert.equal(canonicalProviderRows[0].lastSyncAt, "2026-09-02T08:00:00-05:00")
+  health: "healthy"
+})).ok, false)
+assert.equal(adapter.parseAggregateStatus('{"version":1,"adapters":[]}').ok, true)
+assert.equal(adapter.parseAggregateStatus('{"version":1,"adapters":"old"}').ok, false)
+assert.equal(adapter.parseAggregateStatus('{"version":2,"adapters":[]}').ok, false)
+assert.equal(adapter.parseAggregateStatus("not json").ok, false)
+const mismatchedMetricDocument = JSON.parse(JSON.stringify(aggregateDocument))
+mismatchedMetricDocument.adapters[0].prerequisites[0].requirement.unit = "seconds"
+assert.equal(adapter.parseAggregateStatus(JSON.stringify(mismatchedMetricDocument)).ok, false)
+const duplicateGateDocument = JSON.parse(JSON.stringify(aggregateDocument))
+duplicateGateDocument.adapters[1].prerequisites[0].gateId =
+  duplicateGateDocument.adapters[0].prerequisites[0].gateId
+assert.equal(adapter.parseAggregateStatus(JSON.stringify(duplicateGateDocument)).ok, false)
 
 assert.equal(context.earnedRows(adaptiveStatus)[0].bank, 300)
 assert.equal(context.flexTargets(adaptiveStatus)[1].label, "Other Games")

@@ -11,12 +11,15 @@ Item {
   property string evercountCommand: "/usr/bin/sundown-adapter-evercount"
   property bool statusKnown: false
   property bool reportKnown: false
+  property bool adapterStatusKnown: false
   property bool available: false
   property bool everLoaded: false
   property var status: Model.emptyStatus()
   property var report: Model.emptyReport()
+  property var adapterStatus: PrerequisiteAdapter.emptyStatus()
   property string statusError: ""
   property string reportError: ""
+  property string adapterStatusError: ""
   property string statusCompatibility: ""
   property string reportCompatibility: ""
   property bool flexBusy: false
@@ -25,9 +28,11 @@ Item {
   property bool evercountSyncBusy: false
   property string evercountSyncMessage: ""
   property string evercountSyncError: ""
-  property var directProviderStatuses: ({})
-  readonly property var prerequisiteProviders: PrerequisiteAdapter.providers(
-    status, directProviderStatuses)
+  readonly property var prerequisiteProviders: PrerequisiteAdapter.providers(adapterStatus)
+  readonly property var adapterPrerequisites: PrerequisiteAdapter.prerequisites(adapterStatus)
+  readonly property list<string> adapterStatusCommand: [
+    root.sundownCommand, "adapters", "status", "--json"
+  ]
   property string _statusOutput: ""
   property string _statusStderr: ""
   property string _reportOutput: ""
@@ -36,11 +41,12 @@ Item {
   property string _flexStderr: ""
   property string _evercountSyncOutput: ""
   property string _evercountSyncStderr: ""
-  property string _evercountStatusOutput: ""
-  property string _evercountStatusStderr: ""
+  property string _adapterStatusStderr: ""
+  property var _adapterStatusParsed: null
+  property string _adapterStatusParseError: ""
   property bool _statusCompleted: false
   property bool _reportCompleted: false
-  property bool _evercountStatusCompleted: false
+  property bool _adapterStatusCompleted: false
 
   visible: false
   width: 0
@@ -67,25 +73,13 @@ Item {
     refreshReport()
   }
 
-  function setDirectProviderStatus(provider) {
-    const next = Object.assign({}, directProviderStatuses)
-    next[provider.id] = provider
-    directProviderStatuses = next
-  }
-
-  function failDirectProviderStatus(id, message) {
-    setDirectProviderStatus(PrerequisiteAdapter.failedProvider(
-      directProviderStatuses[id], id, message))
-  }
-
   function refreshProviderStatuses() {
-    if (PrerequisiteAdapter.providerIds(status).indexOf("evercount") < 0) return
-    if (PrerequisiteAdapter.hasCanonicalProvider(status, "evercount")) return
-    if (evercountStatusProcess.running) return
-    _evercountStatusOutput = ""
-    _evercountStatusStderr = ""
-    _evercountStatusCompleted = false
-    evercountStatusProcess.running = true
+    if (adapterStatusProcess.running) return
+    _adapterStatusStderr = ""
+    _adapterStatusParsed = null
+    _adapterStatusParseError = ""
+    _adapterStatusCompleted = false
+    adapterStatusProcess.running = true
   }
 
   function redeemFlex(target) {
@@ -100,7 +94,8 @@ Item {
   }
 
   function syncEvercount() {
-    if (evercountSyncProcess.running) return
+    if (evercountSyncProcess.running
+        || !PrerequisiteAdapter.providerManualSync(adapterStatus, "evercount")) return
     evercountSyncBusy = true
     evercountSyncMessage = ""
     evercountSyncError = ""
@@ -113,6 +108,13 @@ Item {
     if (issue === "core-too-old") return qsTr("Update the Sundown core to use this panel")
     if (issue === "plugin-too-old") return qsTr("Update the Sundown Omarchy plugin")
     return fallback
+  }
+
+  function adapterStatusFailure(stderr) {
+    const message = String(stderr || "")
+    if (message.indexOf("unknown command \"adapters\"") >= 0)
+      return qsTr("Update Sundown to load prerequisite provider status")
+    return qsTr("Could not load prerequisite provider status")
   }
 
   Process {
@@ -163,33 +165,38 @@ Item {
   }
 
   Process {
-    id: evercountStatusProcess
-    command: [root.evercountCommand, "status"]
+    id: adapterStatusProcess
+    command: root.adapterStatusCommand
     onRunningChanged: {
-      if (!running && !root._evercountStatusCompleted) {
-        root._evercountStatusCompleted = true
-        root.failDirectProviderStatus("evercount", qsTr("Evercount status is unavailable"))
+      if (!running && !root._adapterStatusCompleted) {
+        root._adapterStatusCompleted = true
+        root.adapterStatusKnown = true
+        root.adapterStatusError = qsTr("Could not load prerequisite provider status")
       }
     }
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
-        root._evercountStatusOutput = text
-        root._evercountStatusCompleted = true
-        const parsed = PrerequisiteAdapter.parseDirectStatus(text, "evercount")
-        if (parsed.ok) root.setDirectProviderStatus(parsed.provider)
-        else root.failDirectProviderStatus("evercount", parsed.error)
+        const parsed = PrerequisiteAdapter.parseAggregateStatus(text)
+        root._adapterStatusParsed = parsed.ok ? parsed.data : null
+        root._adapterStatusParseError = parsed.ok ? "" : parsed.error
       }
     }
     stderr: StdioCollector {
       waitForEnd: true
-      onStreamFinished: root._evercountStatusStderr = String(text || "").trim()
+      onStreamFinished: root._adapterStatusStderr = String(text || "").trim()
     }
     onExited: function(exitCode) {
-      root._evercountStatusCompleted = true
-      if (exitCode === 0 && root._evercountStatusOutput !== "") return
-      root.failDirectProviderStatus("evercount", root._evercountStatusStderr
-        || qsTr("Evercount status is unavailable"))
+      root._adapterStatusCompleted = true
+      root.adapterStatusKnown = true
+      if (exitCode === 0 && root._adapterStatusParsed !== null) {
+        root.adapterStatus = root._adapterStatusParsed
+        root.adapterStatusError = ""
+        return
+      }
+      root.adapterStatusError = exitCode === 0 && root._adapterStatusParseError !== ""
+        ? root._adapterStatusParseError
+        : root.adapterStatusFailure(root._adapterStatusStderr)
     }
   }
 

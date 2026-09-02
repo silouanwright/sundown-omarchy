@@ -22,6 +22,9 @@ Column {
   readonly property bool evercountSyncVisible: root.providerRows.some(function(provider) {
     return provider.id === "evercount" && provider.manualSync
   })
+  readonly property bool hasProviderPrerequisites: root.gateRows.some(function(gate) {
+    return String(gate.provider || "") !== ""
+  })
 
   signal redeem(string target)
   signal syncEvercount()
@@ -40,15 +43,30 @@ Column {
       root.syncEvercount()
   }
 
+  function providerManualSync(providerId) {
+    return root.providerRows.some(function(provider) {
+      return provider.id === providerId && provider.manualSync === true
+    })
+  }
+
+  function metricNumber(value) {
+    const numeric = Number(value)
+    if (!isFinite(numeric)) return "0"
+    if (Math.round(numeric) === numeric) return String(numeric)
+    return numeric.toFixed(2).replace(/\.?0+$/, "")
+  }
+
   function gateValue(gate) {
     if (!gate.synchronized) return qsTr("Syncing")
-    if (gate.kind === "count") {
-      const unit = gate.required === 1 ? qsTr("entry") : qsTr("entries")
-      return qsTr("%1 / %2 %3").arg(gate.used).arg(gate.required).arg(unit)
-    }
-    return qsTr("%1 / %2")
-      .arg(Model.formatDuration(gate.used))
-      .arg(Model.formatDuration(gate.required))
+    if (gate.metricUnit === "seconds" || gate.kind === "duration")
+      return qsTr("%1 / %2")
+        .arg(Model.formatDuration(gate.used))
+        .arg(Model.formatDuration(gate.required))
+    const unit = gate.metricUnit === "provider_units"
+      ? qsTr("units")
+      : (gate.required === 1 ? qsTr("completion") : qsTr("completions"))
+    return qsTr("%1 / %2 %3")
+      .arg(metricNumber(gate.used)).arg(metricNumber(gate.required)).arg(unit)
   }
 
   function gateDetail(gate) {
@@ -62,10 +80,12 @@ Column {
       return details.length > 0 ? qsTr("Completed · %1").arg(details.join(qsTr(" · ")))
         : qsTr("Completed")
     }
-    if (gate.kind === "count") {
-      const unit = gate.remaining === 1 ? qsTr("entry") : qsTr("entries")
+    if (gate.metricUnit !== "seconds" && gate.kind !== "duration") {
+      const unit = gate.metricUnit === "provider_units"
+        ? (gate.remaining === 1 ? qsTr("unit") : qsTr("units"))
+        : (gate.remaining === 1 ? qsTr("completion") : qsTr("completions"))
       return qsTr("%1 %2 left · Required for: %3")
-        .arg(gate.remaining).arg(unit).arg(gate.targets)
+        .arg(metricNumber(gate.remaining)).arg(unit).arg(gate.targets)
     }
     return qsTr("%1 left · Required for: %2")
       .arg(Model.formatDuration(gate.remaining)).arg(gate.targets)
@@ -106,11 +126,14 @@ Column {
     const lastSync = new Date(String(provider.lastSyncAt || ""))
     if (!isNaN(lastSync.getTime()))
       parts.push(qsTr("Last sync %1").arg(lastSync.toLocaleString(Qt.locale(), Locale.ShortFormat)))
-    else if (provider.synchronized)
-      parts.push(qsTr("Evidence synchronized · Last sync time unavailable"))
     else
       parts.push(qsTr("No successful sync recorded"))
-    if (provider.message) parts.push(provider.message)
+    const lastRead = new Date(String(provider.lastReadAt || ""))
+    if (isNaN(lastSync.getTime()) && !isNaN(lastRead.getTime()))
+      parts.push(qsTr("Last provider read %1")
+        .arg(lastRead.toLocaleString(Qt.locale(), Locale.ShortFormat)))
+    if (provider.errorMessage) parts.push(provider.errorMessage)
+    if (provider.errorAction) parts.push(provider.errorAction)
     return parts.join(qsTr(" · "))
   }
 
@@ -233,6 +256,18 @@ Column {
     fontFamily: root.fontFamily
   }
 
+  Text {
+    visible: root.hasProviderPrerequisites && root.controller.adapterStatusKnown
+      && root.controller.adapterStatusError !== ""
+    width: parent.width
+    text: root.controller.adapterStatusError
+    textFormat: Text.PlainText
+    color: Color.urgent
+    font.family: root.fontFamily
+    font.pixelSize: Style.font.caption
+    wrapMode: Text.WordWrap
+  }
+
   Repeater {
     model: root.gateRows
 
@@ -243,8 +278,9 @@ Column {
       value: root.gateValue(modelData)
       detail: root.gateDetail(modelData)
       ratio: modelData.ratio
-      complete: modelData.satisfied
+      complete: modelData.passed === true
       actionVisible: modelData.provider === "evercount"
+        && root.providerManualSync(modelData.provider)
       actionBusy: actionVisible && root.controller.evercountSyncBusy
       actionTooltip: root.controller.evercountSyncBusy
         ? qsTr("Syncing Evercount")

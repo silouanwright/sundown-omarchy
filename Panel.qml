@@ -13,7 +13,8 @@ Panel {
   readonly property color dim: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.62)
   readonly property string fontFamily: Style.font.family
   readonly property var budgetRows: Model.budgetRows(controller.status)
-  readonly property var gateRows: Model.gateRows(controller.status)
+  readonly property var gateRows: Model.gateRows(
+    controller.status, controller.adapterPrerequisites)
   readonly property var providerRows: controller.prerequisiteProviders
   readonly property var earnedRows: Model.earnedRows(controller.status)
   readonly property var flexAuditRows: Model.flexAuditRows(controller.status)

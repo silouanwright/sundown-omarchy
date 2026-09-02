@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import Quickshell
 import "Plugin" as Plugin
@@ -59,8 +61,11 @@ ShellRoot {
     if (!today || today.implicitHeight <= 0)
       return fail("could not create the Today panel view")
     const durationGate = {
+      id: "journal-before-distractions",
+      gateId: "journal-before-distractions",
       synchronized: true,
       kind: "duration",
+      metricUnit: "seconds",
       used: 616,
       required: 600,
       remaining: 0,
@@ -74,9 +79,12 @@ ShellRoot {
           !== "Completed · Unlocked: Social · Waiting on another prerequisite: Gaming")
       return fail("multi-prerequisite readiness was not reflected per allowance")
     today.gateRows = [{
+      id: "morning-prayer",
+      gateId: "morning-prayer",
       provider: "evercount",
       source: "Morning Prayer",
       kind: "duration",
+      metricUnit: "seconds",
       used: 600,
       required: 1800,
       remaining: 1200,
@@ -91,7 +99,9 @@ ShellRoot {
       health: "healthy",
       synchronized: true,
       lastSyncAt: "2026-09-02T09:10:01-05:00",
-      message: "",
+      lastReadAt: "2026-09-02T09:10:00-05:00",
+      errorMessage: "",
+      errorAction: "",
       manualSync: true
     }]
     if (!today.evercountSyncVisible)
@@ -105,17 +115,44 @@ ShellRoot {
     if (syncRequests !== 1)
       return fail("manual Evercount sync did not emit exactly once")
     const countGate = {
+      id: "two-entries",
+      gateId: "two-entries",
       synchronized: true,
       kind: "count",
+      metricUnit: "completions",
       used: 1,
       required: 2,
       remaining: 1,
       satisfied: false,
       targets: "Facebook"
     }
-    if (today.gateValue(countGate) !== "1 / 2 entries"
-        || today.gateDetail(countGate) !== "1 entry left · Required for: Facebook")
+    if (today.gateValue(countGate) !== "1 / 2 completions"
+        || today.gateDetail(countGate) !== "1 completion left · Required for: Facebook")
       return fail("count prerequisite progress is not explicit")
+    const providerMetricGate = {
+      synchronized: true,
+      kind: "completion",
+      metricUnit: "provider_units",
+      used: 4.5,
+      required: 5,
+      remaining: 0.5,
+      satisfied: false,
+      targets: "Gaming"
+    }
+    if (today.gateValue(providerMetricGate) !== "4.5 / 5 units"
+        || today.gateDetail(providerMetricGate) !== "0.5 units left · Required for: Gaming")
+      return fail("provider-unit prerequisite progress is not explicit")
+    const failedProvider = {
+      health: "unavailable",
+      synchronized: true,
+      lastSyncAt: "2026-09-02T09:10:01-05:00",
+      lastReadAt: "2026-09-02T09:11:00-05:00",
+      errorMessage: "Evercount did not respond.",
+      errorAction: "Check the connection, then sync again."
+    }
+    if (today.providerDetail(failedProvider).indexOf("Evercount did not respond.") < 0
+        || today.providerDetail(failedProvider).indexOf("Check the connection, then sync again.") < 0)
+      return fail("provider errors did not retain their actionable message")
     today.destroy()
 
     const history = historyViewComponent.createObject(root)
@@ -136,6 +173,8 @@ ShellRoot {
     property string statusCompatibility: ""
     property bool available: true
     property string statusError: ""
+    property bool adapterStatusKnown: true
+    property string adapterStatusError: ""
     property bool flexBusy: false
     property string flexMessage: ""
     property string flexError: ""
@@ -163,6 +202,16 @@ ShellRoot {
       panelOpen: true
       sundownCommand: "/definitely-missing/sundown"
       evercountCommand: "/definitely-missing/sundown-adapter-evercount"
+      adapterStatus: ({
+        version: 1,
+        adapters: [{
+          id: "evercount",
+          adapterId: "evercount",
+          label: "Evercount",
+          manualSync: true,
+          prerequisites: []
+        }]
+      })
     }
   }
 
@@ -349,6 +398,12 @@ ShellRoot {
   Component.onCompleted: {
     controller = controllerComponent.createObject(root)
     if (!controller) fail("could not create SundownController")
+    if (controller.adapterStatusCommand.join(" ")
+        !== "/definitely-missing/sundown adapters status --json")
+      fail("controller did not use the provider-neutral aggregate status command")
+    if (controller.adapterStatusFailure('unknown command "adapters"')
+        !== qsTr("Update Sundown to load prerequisite provider status"))
+      fail("old aggregate-command errors did not produce an update action")
     controller.syncEvercount()
   }
 }

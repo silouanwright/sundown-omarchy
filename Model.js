@@ -45,7 +45,6 @@ function emptyStatus() {
     gates: [],
     completion_gates: [],
     duration_gates: [],
-    prerequisite_providers: [],
     earned: []
   }
 }
@@ -104,8 +103,6 @@ function parseStatus(raw) {
   value.gates = Array.isArray(value.gates) ? value.gates : []
   value.completion_gates = Array.isArray(value.completion_gates) ? value.completion_gates : []
   value.duration_gates = Array.isArray(value.duration_gates) ? value.duration_gates : []
-  value.prerequisite_providers = Array.isArray(value.prerequisite_providers)
-    ? value.prerequisite_providers : []
   value.earned = Array.isArray(value.earned) ? value.earned : []
   return { ok: true, data: value, error: "" }
 }
@@ -285,7 +282,7 @@ function budgetDetail(row) {
   return formatDuration(row.remaining) + " remaining"
 }
 
-function gateRows(status) {
+function gateRows(status, adapterPrerequisites) {
   status = status || emptyStatus()
   var rows = []
   var gates = Array.isArray(status.gates) ? status.gates : []
@@ -293,10 +290,15 @@ function gateRows(status) {
     var required = Math.max(0, number(gate.required_seconds, 0))
     var used = Math.max(0, number(gate.used_seconds, 0))
     var targetIds = Array.isArray(gate.targets) ? gate.targets : []
+    var gateId = String(gate.name || "prerequisite")
     rows.push({
+      id: gateId,
+      gateId: gateId,
       kind: "duration",
+      metricUnit: "seconds",
       name: String(gate.name || "Prerequisite"),
       source: titleForRule(gate.source_group),
+      evidenceSource: String(gate.source_group || ""),
       targetIds: targetIds,
       targets: targetIds.map(function(target) {
         return targetLabel(target, status)
@@ -314,10 +316,15 @@ function gateRows(status) {
     var required = Math.max(0, number(gate.required_completions, 0))
     var used = Math.max(0, number(gate.active_completions, 0))
     var targetIds = Array.isArray(gate.targets) ? gate.targets : []
+    var gateId = String(gate.name || "prerequisite")
     rows.push({
+      id: gateId,
+      gateId: gateId,
       kind: "count",
+      metricUnit: "completions",
       name: String(gate.name || "Prerequisite"),
       source: evidenceSourceLabel(gate.source, gate.name),
+      evidenceSource: String(gate.source || ""),
       provider: evidenceProvider(gate.source),
       targetIds: targetIds,
       targets: targetIds.map(function(target) { return targetLabel(target, status) }).join(", "),
@@ -334,10 +341,15 @@ function gateRows(status) {
     var required = Math.max(0, number(gate.required_seconds, 0))
     var used = Math.max(0, number(gate.recorded_seconds, 0))
     var targetIds = Array.isArray(gate.targets) ? gate.targets : []
+    var gateId = String(gate.name || "prerequisite")
     rows.push({
+      id: gateId,
+      gateId: gateId,
       kind: "duration",
+      metricUnit: "seconds",
       name: String(gate.name || "Prerequisite"),
       source: evidenceSourceLabel(gate.source, gate.name),
+      evidenceSource: String(gate.source || ""),
       provider: evidenceProvider(gate.source),
       targetIds: targetIds,
       targets: targetIds.map(function(target) { return targetLabel(target, status) }).join(", "),
@@ -348,6 +360,24 @@ function gateRows(status) {
       synchronized: gate.synchronized !== false,
       satisfied: gate.satisfied === true
     })
+  })
+  var adapterGates = Array.isArray(adapterPrerequisites) ? adapterPrerequisites : []
+  var adapterGatesById = {}
+  adapterGates.forEach(function(gate) {
+    var gateId = String(gate && gate.gateId || "")
+    if (gateId) adapterGatesById[gateId] = gate
+  })
+  rows.forEach(function(row) {
+    var adapterGate = adapterGatesById[row.gateId]
+    if (!adapterGate) return
+    row.provider = String(adapterGate.providerId || row.provider || "")
+    row.metricUnit = String(adapterGate.unit || row.metricUnit)
+    row.used = Math.max(0, number(adapterGate.progress, row.used))
+    row.required = Math.max(0, number(adapterGate.requirement, row.required))
+    row.remaining = Math.max(0, row.required - row.used)
+    row.ratio = row.required > 0 ? clamp(row.used / row.required, 0, 1) : 0
+    row.adapterSynchronized = adapterGate.synchronized === true
+    row.adapterSatisfied = adapterGate.satisfied === true
   })
   rows.forEach(function(row) {
     row.passed = row.synchronized !== false && row.satisfied === true

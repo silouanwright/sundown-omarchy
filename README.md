@@ -16,6 +16,7 @@ plugin stores no policy or usage data. It reads status and reports with:
 
 ```bash
 sundown status --json
+sundown adapters status --json
 sundown report week --json
 ```
 
@@ -29,17 +30,18 @@ The daemon validates the caller, target, remaining passes, schedule, curfew,
 morning focus, and prerequisite gate before recording any redemption.
 
 When an Evercount-backed prerequisite is configured, the Today view offers an
-explicit sync action. It runs the separately installed read-only adapter and
+explicit sync action only when the aggregate contract publishes
+`manualSync: true`. It runs the separately installed read-only adapter and
 refreshes panel status after a successful reconciliation:
 
 ```bash
 sundown-adapter-evercount sync
 ```
 
-The panel also reads `sundown-adapter-evercount status` to show provider health
-and the last successful evidence delivery. Other providers remain explicit
-when their health or last-sync metadata is unavailable. The compatibility
-mapping and the expected provider-neutral core field are documented in
+The panel reads `sundown adapters status --json` to show every published
+provider's health, last successful reconciliation, metric units, and actionable
+errors. The provider-neutral mapping and policy-authority boundary are
+documented in
 [`docs/provider-boundary.md`](docs/provider-boundary.md).
 
 ## Install
@@ -63,10 +65,11 @@ omarchy plugin remove io.github.silouanwright.sundown
 
 ## Compatibility
 
-Plugin `0.2.x` supports Sundown status/report protocol `1`. A lower protocol
-version prompts the user to update the Sundown core; a higher version prompts
-the user to update this plugin. The top-level `version` field in both JSON
-commands is the protocol contract, independent of either package version.
+Plugin `0.2.x` supports Sundown status/report protocol `1` and aggregate
+adapter-status version `1`. A lower status/report protocol prompts the user to
+update the Sundown core; a higher version prompts the user to update this
+plugin. Adapter-status shape errors leave the last valid provider snapshot in
+place and never fall back to a provider-specific status command.
 
 ## Development
 
@@ -85,8 +88,8 @@ evidence for the existing panel views. They are not additional plugin surfaces.
 
 ## Privacy and permissions
 
-The plugin runs `/usr/bin/sundown status --json`, `/usr/bin/sundown report week
---json`, and `/usr/bin/sundown-adapter-evercount status`. Only explicit panel
+The plugin runs `/usr/bin/sundown status --json`, `/usr/bin/sundown adapters
+status --json`, and `/usr/bin/sundown report week --json`. Only explicit panel
 actions run `/usr/bin/sundown flex redeem TARGET` or
 `/usr/bin/sundown-adapter-evercount sync`. The adapter owns its read-only
 network request and credential; the QML process never reads or passes the
