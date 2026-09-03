@@ -168,9 +168,12 @@ function gatesForTarget(status, target) {
 function budgetRow(id, label, value, status) {
   var restricted = value.daily_limit_seconds !== null && value.daily_limit_seconds !== undefined
   var baseLimit = restricted ? Math.max(0, number(value.daily_limit_seconds, 0)) : 0
+  var flexGranted = Math.max(0, number(value.flex_granted_seconds, 0))
+  var flexRemaining = Math.max(0, number(value.flex_remaining_seconds, 0))
+  var earnedGranted = Math.max(0, number(value.earned_granted_seconds, 0))
   var limit = restricted ? baseLimit
-    + Math.max(0, number(value.flex_granted_seconds, 0))
-    + Math.max(0, number(value.earned_granted_seconds, 0)) : 0
+    + flexGranted
+    + earnedGranted : 0
   var used = Math.max(0, number(value.used_seconds, 0))
   var dailyRemaining = restricted ? Math.max(0, limit - used) : 0
   var remaining = restricted ? Math.max(0, number(value.available_seconds,
@@ -190,9 +193,14 @@ function budgetRow(id, label, value, status) {
   var paceLimit = pace ? Math.max(0, number(pace.limit_seconds, 0)) : 0
   var paceRemaining = pace ? Math.max(0, number(pace.remaining_seconds,
     Math.max(0, paceLimit - paceUsed))) : 0
-  var dailyIsBinding = pace && dailyRemaining < paceRemaining
-  var meterUsed = pace && !dailyIsBinding ? paceUsed : used
-  var meterLimit = pace && !dailyIsBinding ? paceLimit : limit
+  var baseDailyRemaining = restricted
+    ? Math.max(0, baseLimit + earnedGranted - used) : 0
+  var dailyIsBinding = pace && baseDailyRemaining < paceRemaining
+  var rollingMeterLimit = paceLimit + flexGranted
+  var rollingMeterRemaining = paceRemaining + flexRemaining
+  var meterUsed = pace && !dailyIsBinding
+    ? Math.max(0, rollingMeterLimit - rollingMeterRemaining) : used
+  var meterLimit = pace && !dailyIsBinding ? rollingMeterLimit : limit
   return {
     id: id,
     label: label,
@@ -218,7 +226,7 @@ function budgetRow(id, label, value, status) {
     prerequisiteLocked: prerequisiteLocked,
     schedule: schedule,
     pace: pace,
-    flexRemaining: Math.max(0, number(value.flex_remaining_seconds, 0)),
+    flexRemaining: flexRemaining,
     earnedBank: Math.max(0, number(value.earned_bank_seconds, 0)),
     warningMinutes: value.next_warning_minutes === null || value.next_warning_minutes === undefined
       ? null : Math.max(0, number(value.next_warning_minutes, 0))

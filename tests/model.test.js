@@ -152,8 +152,8 @@ const adaptiveBudgets = context.budgetRows(adaptiveStatus)
 assert.equal(adaptiveBudgets.length, 2)
 assert.equal(adaptiveBudgets[0].limit, 8400)
 assert.equal(adaptiveBudgets[0].meterUsed, 1200)
-assert.equal(adaptiveBudgets[0].meterLimit, 3600)
-assert.equal(adaptiveBudgets[0].meterRatio, 1 / 3)
+assert.equal(adaptiveBudgets[0].meterLimit, 4500)
+assert.equal(adaptiveBudgets[0].meterRatio, 1200 / 4500)
 assert.equal(adaptiveBudgets[0].meterScope, "rolling")
 assert.equal(adaptiveBudgets[0].blockedBy, "prerequisite-gate")
 assert.equal(adaptiveBudgets[0].prerequisiteLocked, true)
@@ -179,6 +179,31 @@ assert.equal(context.budgetRows(context.parseStatus(JSON.stringify({
     pace: { used_seconds: 905, limit_seconds: 900, window_seconds: 3600, remaining_seconds: 0 }
   }
 })).data)[0].meterRatio, 1)
+
+const rollingFlexBudget = context.budgetRows(context.parseStatus(JSON.stringify({
+  version: 1,
+  steam: { daily_limit_seconds: null, used_seconds: 0 },
+  web: {
+    rules: [{
+      name: "youtube",
+      daily_limit_seconds: 3600,
+      used_seconds: 2054,
+      available_seconds: 646,
+      flex_granted_seconds: 900,
+      flex_remaining_seconds: 646,
+      pace: {
+        used_seconds: 2054,
+        limit_seconds: 1800,
+        window_seconds: 7200,
+        remaining_seconds: 0
+      }
+    }]
+  }
+})).data)[1]
+assert.equal(rollingFlexBudget.meterScope, "rolling")
+assert.equal(rollingFlexBudget.meterUsed, 2054)
+assert.equal(rollingFlexBudget.meterLimit, 2700)
+assert.equal(rollingFlexBudget.meterRatio, 2054 / 2700)
 
 const dailyBindingBudget = context.budgetRows(context.parseStatus(JSON.stringify({
   version: 1,
